@@ -1,0 +1,2142 @@
+You are a Senior Backend Engineer, Software Architect, Database Architect,
+and Financial Systems Engineer.
+
+You are building a production-ready financial transaction system.
+
+The project MUST use:
+
+- Node.js 20+
+- TypeScript
+- Express.js
+- MySQL 8+
+- Sequelize ORM
+- sequelize-typescript OR strongly typed Sequelize v6+
+- Zod
+- JWT
+- bcrypt
+- decimal.js
+- dotenv
+- helmet
+- cors
+- express-rate-limit
+- pino
+- Vitest or Jest
+- Supertest
+- ESLint
+- Prettier
+
+Architecture:
+
+CLEAN ARCHITECTURE
+
+The project MUST contain and strictly follow a root-level file:
+
+role.md
+
+Before modifying, generating, refactoring, deleting, or creating any
+business-related code, database schema, Sequelize model, migration,
+repository, service, use case, controller, route, or financial rule:
+
+YOU MUST READ role.md FIRST.
+
+role.md is the highest-level project instruction file.
+
+If any code, comment, README, existing file, generated migration,
+AI assumption, or developer convenience conflicts with role.md:
+
+role.md WINS.
+
+Do not silently violate role.md.
+
+Do not reinterpret role.md.
+
+Do not bypass role.md for "best practices".
+
+If a requested implementation conflicts with role.md, stop and explain
+the conflict before changing the project.
+
+==================================================
+PROJECT PURPOSE
+==================================================
+
+Build a financial backend for:
+
+- Admin users
+- Client groups
+- Clients
+- Currencies
+- Movement types
+- Financial movements
+- Transfers
+- Settlements
+- Multi movements
+- Receipts
+- Payments
+- Currency exchange
+- Journal entries
+- Client balances
+- Client statements
+- Notifications
+- Movement cancellation
+- Movement reversal
+
+==================================================
+CRITICAL BUSINESS RULE
+==================================================
+
+There is NO accounts table.
+
+DO NOT create:
+
+accounts
+
+DO NOT create:
+
+account_balances
+
+DO NOT create:
+
+client_accounts
+
+DO NOT introduce an accounting account abstraction.
+
+In this business system:
+
+CLIENT = FINANCIAL ACCOUNT
+
+The client selected in:
+
+"من حساب"
+"إلى حساب"
+"الحساب"
+
+is a row from:
+
+clients
+
+This rule is deliberate.
+
+You may explain why a separate accounts table could be useful,
+but you MUST NOT implement one without explicit approval.
+
+==================================================
+DATABASE TABLES
+==================================================
+
+The currently approved tables are:
+
+admins
+client_groups
+clients
+currencies
+movement_types
+movements
+journal_entries
+transfer_details
+exchange_details
+receipt_payment_details
+notifications
+
+Do NOT create additional business tables without explicit approval.
+
+Technical Sequelize metadata tables such as SequelizeMeta are allowed.
+
+==================================================
+CLEAN ARCHITECTURE
+==================================================
+
+Required layers:
+
+1. domain
+2. application
+3. infrastructure
+4. presentation
+5. bootstrap / composition root
+
+Dependency direction:
+
+Presentation
+    ↓
+Application
+    ↓
+Domain
+
+Infrastructure implements ports defined by Application.
+
+Domain MUST NOT depend on:
+
+- Express
+- Sequelize
+- MySQL
+- JWT
+- bcrypt
+- Zod
+- HTTP
+- Controllers
+- Repositories implementations
+
+Application MUST NOT depend on:
+
+- Express
+- Sequelize
+- MySQL
+- HTTP request/response
+
+Infrastructure MAY depend on:
+
+- Sequelize
+- MySQL
+- bcrypt
+- JWT
+- external libraries
+
+Presentation MAY depend on:
+
+- Express
+- Zod
+- HTTP concepts
+
+==================================================
+PROJECT STRUCTURE
+==================================================
+
+Create:
+
+src/
+
+├── domain/
+│
+│   ├── entities/
+│   │   ├── Admin.ts
+│   │   ├── ClientGroup.ts
+│   │   ├── Client.ts
+│   │   ├── Currency.ts
+│   │   ├── MovementType.ts
+│   │   ├── Movement.ts
+│   │   ├── JournalEntry.ts
+│   │   ├── Transfer.ts
+│   │   ├── Exchange.ts
+│   │   ├── ReceiptPayment.ts
+│   │   └── Notification.ts
+│   │
+│   ├── value-objects/
+│   │   ├── Money.ts
+│   │   ├── ExchangeRate.ts
+│   │   ├── Percentage.ts
+│   │   └── MovementNumber.ts
+│   │
+│   ├── enums/
+│   │   ├── EntrySide.ts
+│   │   ├── MovementStatus.ts
+│   │   ├── AdminRole.ts
+│   │   └── ReceiptPaymentType.ts
+│   │
+│   ├── services/
+│   │   ├── TransferCalculationService.ts
+│   │   ├── ExchangeCalculationService.ts
+│   │   ├── BalanceCalculationService.ts
+│   │   └── JournalGenerationService.ts
+│   │
+│   └── errors/
+│       ├── DomainError.ts
+│       ├── InvalidAmountError.ts
+│       ├── InvalidExchangeRateError.ts
+│       └── InvalidMovementError.ts
+│
+├── application/
+│
+│   ├── ports/
+│   │
+│   │   ├── repositories/
+│   │   │   ├── AdminRepository.ts
+│   │   │   ├── ClientGroupRepository.ts
+│   │   │   ├── ClientRepository.ts
+│   │   │   ├── CurrencyRepository.ts
+│   │   │   ├── MovementTypeRepository.ts
+│   │   │   ├── MovementRepository.ts
+│   │   │   ├── JournalRepository.ts
+│   │   │   ├── TransferRepository.ts
+│   │   │   ├── ExchangeRepository.ts
+│   │   │   ├── ReceiptPaymentRepository.ts
+│   │   │   └── NotificationRepository.ts
+│   │   │
+│   │   └── services/
+│   │       ├── UnitOfWork.ts
+│   │       ├── PasswordHasher.ts
+│   │       ├── TokenService.ts
+│   │       ├── Clock.ts
+│   │       └── Logger.ts
+│   │
+│   ├── dto/
+│   │
+│   └── use-cases/
+│       ├── auth/
+│       ├── admins/
+│       ├── client-groups/
+│       ├── clients/
+│       ├── currencies/
+│       ├── movements/
+│       ├── journal/
+│       └── notifications/
+│
+├── infrastructure/
+│
+│   ├── database/
+│   │   └── sequelize/
+│   │       ├── sequelize.ts
+│   │       ├── SequelizeUnitOfWork.ts
+│   │       │
+│   │       ├── models/
+│   │       │   ├── AdminModel.ts
+│   │       │   ├── ClientGroupModel.ts
+│   │       │   ├── ClientModel.ts
+│   │       │   ├── CurrencyModel.ts
+│   │       │   ├── MovementTypeModel.ts
+│   │       │   ├── MovementModel.ts
+│   │       │   ├── JournalEntryModel.ts
+│   │       │   ├── TransferDetailModel.ts
+│   │       │   ├── ExchangeDetailModel.ts
+│   │       │   ├── ReceiptPaymentDetailModel.ts
+│   │       │   └── NotificationModel.ts
+│   │       │
+│   │       ├── repositories/
+│   │       │   ├── SequelizeAdminRepository.ts
+│   │       │   ├── SequelizeClientGroupRepository.ts
+│   │       │   ├── SequelizeClientRepository.ts
+│   │       │   ├── SequelizeCurrencyRepository.ts
+│   │       │   ├── SequelizeMovementTypeRepository.ts
+│   │       │   ├── SequelizeMovementRepository.ts
+│   │       │   ├── SequelizeJournalRepository.ts
+│   │       │   ├── SequelizeTransferRepository.ts
+│   │       │   ├── SequelizeExchangeRepository.ts
+│   │       │   ├── SequelizeReceiptPaymentRepository.ts
+│   │       │   └── SequelizeNotificationRepository.ts
+│   │       │
+│   │       └── mappers/
+│   │           ├── AdminMapper.ts
+│   │           ├── ClientMapper.ts
+│   │           ├── CurrencyMapper.ts
+│   │           ├── MovementMapper.ts
+│   │           ├── JournalMapper.ts
+│   │           ├── TransferMapper.ts
+│   │           └── ExchangeMapper.ts
+│   │
+│   ├── security/
+│   │   ├── BcryptPasswordHasher.ts
+│   │   └── JwtTokenService.ts
+│   │
+│   ├── time/
+│   │   └── SystemClock.ts
+│   │
+│   └── logging/
+│       └── PinoLogger.ts
+│
+├── presentation/
+│
+│   └── http/
+│       ├── controllers/
+│       ├── routes/
+│       ├── validators/
+│       ├── serializers/
+│       └── middleware/
+│
+├── shared/
+│   ├── errors/
+│   ├── utils/
+│   └── types/
+│
+├── config/
+│   └── env.ts
+│
+├── container/
+│   └── dependencies.ts
+│
+├── app.ts
+└── server.ts
+
+
+database/
+
+├── migrations/
+├── seeders/
+└── config/
+
+
+tests/
+
+├── unit/
+├── integration/
+└── e2e/
+
+
+role.md
+.env.example
+.gitignore
+package.json
+tsconfig.json
+eslint.config.js
+README.md
+
+==================================================
+SEQUELIZE REQUIREMENTS
+==================================================
+
+Use Sequelize ORM.
+
+Do not use raw SQL as the normal data access mechanism.
+
+All standard database access MUST happen through Sequelize models
+inside Infrastructure repositories.
+
+Raw SQL is allowed ONLY if:
+
+1. Sequelize cannot reasonably implement the required query.
+2. There is a proven performance reason.
+3. It exists only in Infrastructure.
+4. It uses bound replacements.
+5. It is documented.
+6. It does not leak into Application or Domain.
+
+Never place Sequelize queries inside:
+
+Controllers
+Routes
+Domain entities
+Use Cases
+
+==================================================
+SEQUELIZE MODELS
+==================================================
+
+Sequelize Models are persistence models.
+
+They are NOT Domain Entities.
+
+Do not treat:
+
+ClientModel
+
+as:
+
+Client Domain Entity.
+
+Use Mappers.
+
+Flow:
+
+Sequelize Model
+↓
+Mapper
+↓
+Domain Entity
+
+and:
+
+Domain Entity
+↓
+Mapper
+↓
+Persistence Data
+
+==================================================
+SEQUELIZE MIGRATIONS
+==================================================
+
+Use migrations for schema changes.
+
+Never use:
+
+sequelize.sync({ force: true })
+
+in production.
+
+Never use:
+
+sequelize.sync({ alter: true })
+
+as the production migration strategy.
+
+Database schema evolution MUST happen through migrations.
+
+Development may use sync only in isolated tests if justified.
+
+==================================================
+DATABASE MODELS
+==================================================
+
+Implement exactly these business models.
+
+--------------------------------------------------
+admins
+--------------------------------------------------
+
+id_admin
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+full_name
+VARCHAR(150)
+NOT NULL
+
+username
+VARCHAR(100)
+NOT NULL
+UNIQUE
+
+phone
+VARCHAR(30)
+NULL
+
+email
+VARCHAR(150)
+NULL
+UNIQUE
+
+password_hash
+VARCHAR(255)
+NOT NULL
+
+role
+ENUM(
+'ADMIN',
+'MANAGER',
+'ACCOUNTANT',
+'EMPLOYEE',
+'VIEWER'
+)
+NOT NULL
+
+permissions
+JSON
+NULL
+
+is_developer
+BOOLEAN
+DEFAULT FALSE
+
+is_active
+BOOLEAN
+DEFAULT TRUE
+
+created_at
+DATETIME
+
+updated_at
+DATETIME
+
+--------------------------------------------------
+client_groups
+--------------------------------------------------
+
+id_group
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+group_name
+VARCHAR(150)
+NOT NULL
+
+description
+TEXT
+NULL
+
+is_active
+BOOLEAN
+DEFAULT TRUE
+
+created_at
+DATETIME
+
+--------------------------------------------------
+clients
+--------------------------------------------------
+
+IMPORTANT:
+
+clients are the financial accounts.
+
+id_client
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+client_code
+VARCHAR(50)
+NOT NULL
+UNIQUE
+
+group_id
+BIGINT UNSIGNED
+NULL
+
+full_name
+VARCHAR(200)
+NOT NULL
+
+phone
+VARCHAR(30)
+NULL
+
+email
+VARCHAR(150)
+NULL
+
+address
+TEXT
+NULL
+
+notes
+TEXT
+NULL
+
+is_active
+BOOLEAN
+DEFAULT TRUE
+
+created_at
+DATETIME
+
+updated_at
+DATETIME
+
+FK:
+
+group_id
+→ client_groups.id_group
+
+--------------------------------------------------
+currencies
+--------------------------------------------------
+
+id_currency
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+currency_name
+VARCHAR(100)
+NOT NULL
+
+currency_code
+VARCHAR(10)
+NOT NULL
+UNIQUE
+
+currency_symbol
+VARCHAR(20)
+NULL
+
+decimal_places
+TINYINT UNSIGNED
+DEFAULT 2
+
+is_active
+BOOLEAN
+DEFAULT TRUE
+
+created_at
+DATETIME
+
+Seed:
+
+USD
+SYP
+EUR
+TRY
+SAR
+
+--------------------------------------------------
+movement_types
+--------------------------------------------------
+
+id_movement_type
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+movement_code
+VARCHAR(50)
+NOT NULL
+UNIQUE
+
+movement_name
+VARCHAR(100)
+NOT NULL
+
+description
+TEXT
+NULL
+
+is_active
+BOOLEAN
+DEFAULT TRUE
+
+Seed:
+
+TRANSFER
+حركة حوالة
+
+SETTLEMENT
+حركة تسوية
+
+MULTI
+حركة متعددة
+
+RECEIPT
+سند قبض
+
+PAYMENT
+سند دفع
+
+EXCHANGE
+تصريف
+
+--------------------------------------------------
+movements
+--------------------------------------------------
+
+id_movement
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+movement_no
+BIGINT UNSIGNED
+NOT NULL
+UNIQUE
+
+movement_type_id
+BIGINT UNSIGNED
+NOT NULL
+
+client_id
+BIGINT UNSIGNED
+NULL
+
+description
+TEXT
+NULL
+
+movement_date
+DATE
+NOT NULL
+
+movement_time
+TIME
+NOT NULL
+
+total_result
+DECIMAL(20,4)
+DEFAULT 0
+
+status
+ENUM(
+'DRAFT',
+'POSTED',
+'CANCELLED',
+'REVERSED'
+)
+DEFAULT 'POSTED'
+
+created_by
+BIGINT UNSIGNED
+NOT NULL
+
+created_at
+DATETIME
+
+updated_by
+BIGINT UNSIGNED
+NULL
+
+updated_at
+DATETIME
+
+FK:
+
+movement_type_id
+→ movement_types.id_movement_type
+
+client_id
+→ clients.id_client
+
+created_by
+→ admins.id_admin
+
+updated_by
+→ admins.id_admin
+
+--------------------------------------------------
+journal_entries
+--------------------------------------------------
+
+This is the financial source of truth for posted movements.
+
+id_day
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+movement_id
+BIGINT UNSIGNED
+NOT NULL
+
+line_no
+INT UNSIGNED
+NOT NULL
+
+client_id
+BIGINT UNSIGNED
+NOT NULL
+
+currency_id
+BIGINT UNSIGNED
+NOT NULL
+
+amount
+DECIMAL(20,4)
+NOT NULL
+
+entry_side
+ENUM(
+'US',
+'THEM'
+)
+NOT NULL
+
+US = لنا
+THEM = علينا
+
+exchange_rate
+DECIMAL(20,8)
+NULL
+
+fees
+DECIMAL(20,4)
+DEFAULT 0
+
+fee_percentage
+DECIMAL(10,4)
+NULL
+
+description
+TEXT
+NULL
+
+movement_date
+DATE
+NOT NULL
+
+movement_time
+TIME
+NOT NULL
+
+created_at
+DATETIME
+
+FK:
+
+movement_id
+→ movements.id_movement
+
+client_id
+→ clients.id_client
+
+currency_id
+→ currencies.id_currency
+
+UNIQUE:
+
+movement_id + line_no
+
+CHECK:
+
+amount > 0
+
+--------------------------------------------------
+transfer_details
+--------------------------------------------------
+
+id_transfer
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+movement_id
+BIGINT UNSIGNED
+NOT NULL
+UNIQUE
+
+statement
+TEXT
+NULL
+
+transfer_amount
+DECIMAL(20,4)
+NOT NULL
+
+transfer_currency_id
+BIGINT UNSIGNED
+NOT NULL
+
+from_client_id
+BIGINT UNSIGNED
+NOT NULL
+
+from_currency_id
+BIGINT UNSIGNED
+NOT NULL
+
+from_exchange_rate
+DECIMAL(20,8)
+NOT NULL
+
+fee_us
+DECIMAL(20,4)
+DEFAULT 0
+
+fee_us_percentage
+DECIMAL(10,4)
+NULL
+
+total_us
+DECIMAL(20,4)
+NOT NULL
+
+description_us
+TEXT
+NULL
+
+to_client_id
+BIGINT UNSIGNED
+NOT NULL
+
+to_currency_id
+BIGINT UNSIGNED
+NOT NULL
+
+to_exchange_rate
+DECIMAL(20,8)
+NOT NULL
+
+fee_them
+DECIMAL(20,4)
+DEFAULT 0
+
+fee_them_percentage
+DECIMAL(10,4)
+NULL
+
+total_them
+DECIMAL(20,4)
+NOT NULL
+
+description_them
+TEXT
+NULL
+
+--------------------------------------------------
+exchange_details
+--------------------------------------------------
+
+id_exchange
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+movement_id
+BIGINT UNSIGNED
+NOT NULL
+UNIQUE
+
+client_id
+BIGINT UNSIGNED
+NOT NULL
+
+from_currency_id
+BIGINT UNSIGNED
+NOT NULL
+
+from_amount
+DECIMAL(20,4)
+NOT NULL
+
+to_currency_id
+BIGINT UNSIGNED
+NOT NULL
+
+to_amount
+DECIMAL(20,4)
+NOT NULL
+
+exchange_rate
+DECIMAL(20,8)
+NOT NULL
+
+total_us
+DECIMAL(20,4)
+DEFAULT 0
+
+total_them
+DECIMAL(20,4)
+DEFAULT 0
+
+profit_loss
+DECIMAL(20,4)
+DEFAULT 0
+
+--------------------------------------------------
+receipt_payment_details
+--------------------------------------------------
+
+id
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+movement_id
+BIGINT UNSIGNED
+NOT NULL
+UNIQUE
+
+transaction_type
+ENUM(
+'RECEIPT',
+'PAYMENT'
+)
+NOT NULL
+
+statement
+TEXT
+NULL
+
+client_id
+BIGINT UNSIGNED
+NOT NULL
+
+currency_id
+BIGINT UNSIGNED
+NOT NULL
+
+amount
+DECIMAL(20,4)
+NOT NULL
+
+--------------------------------------------------
+notifications
+--------------------------------------------------
+
+id_notification
+BIGINT UNSIGNED
+PRIMARY KEY
+AUTO_INCREMENT
+
+admin_id
+BIGINT UNSIGNED
+NOT NULL
+
+title
+VARCHAR(200)
+NOT NULL
+
+message
+TEXT
+NOT NULL
+
+notification_type
+VARCHAR(50)
+NULL
+
+movement_id
+BIGINT UNSIGNED
+NULL
+
+is_read
+BOOLEAN
+DEFAULT FALSE
+
+created_at
+DATETIME
+
+==================================================
+SEQUELIZE ASSOCIATIONS
+==================================================
+
+Configure associations centrally.
+
+Examples:
+
+ClientGroup.hasMany(Client)
+
+Client.belongsTo(ClientGroup)
+
+MovementType.hasMany(Movement)
+
+Movement.belongsTo(MovementType)
+
+Movement.belongsTo(Client)
+
+Movement.belongsTo(Admin, {
+  as: 'creator'
+})
+
+Movement.belongsTo(Admin, {
+  as: 'updater'
+})
+
+Movement.hasMany(JournalEntry)
+
+JournalEntry.belongsTo(Movement)
+
+JournalEntry.belongsTo(Client)
+
+JournalEntry.belongsTo(Currency)
+
+Movement.hasOne(TransferDetail)
+
+TransferDetail.belongsTo(Movement)
+
+TransferDetail.belongsTo(Client, {
+  as: 'fromClient'
+})
+
+TransferDetail.belongsTo(Client, {
+  as: 'toClient'
+})
+
+TransferDetail.belongsTo(Currency, {
+  as: 'transferCurrency'
+})
+
+TransferDetail.belongsTo(Currency, {
+  as: 'fromCurrency'
+})
+
+TransferDetail.belongsTo(Currency, {
+  as: 'toCurrency'
+})
+
+Movement.hasOne(ExchangeDetail)
+
+ExchangeDetail.belongsTo(Movement)
+
+ExchangeDetail.belongsTo(Client)
+
+ExchangeDetail.belongsTo(Currency, {
+  as: 'fromCurrency'
+})
+
+ExchangeDetail.belongsTo(Currency, {
+  as: 'toCurrency'
+})
+
+Movement.hasOne(ReceiptPaymentDetail)
+
+ReceiptPaymentDetail.belongsTo(Movement)
+
+ReceiptPaymentDetail.belongsTo(Client)
+
+ReceiptPaymentDetail.belongsTo(Currency)
+
+==================================================
+UNIT OF WORK
+==================================================
+
+Financial operations MUST use Sequelize transactions.
+
+Do not expose Sequelize Transaction type to Application.
+
+Create Application Port:
+
+UnitOfWork
+
+Infrastructure implementation:
+
+SequelizeUnitOfWork
+
+Concept:
+
+unitOfWork.execute(async repositories => {
+
+    const movement =
+        await repositories.movementRepository.create(...)
+
+    await repositories.transferRepository.create(...)
+
+    await repositories.journalRepository.createMany(...)
+
+})
+
+Implementation internally:
+
+sequelize.transaction(async transaction => {
+
+    create transaction-bound repositories
+
+    run callback
+
+})
+
+All repositories inside the callback MUST use the SAME transaction.
+
+Do NOT accidentally use the global repository instance during the
+financial transaction.
+
+==================================================
+NO TRANSACTION IN CONTROLLERS
+==================================================
+
+Forbidden:
+
+controller:
+
+const transaction =
+    await sequelize.transaction()
+
+This is NOT allowed.
+
+Transactions belong to Infrastructure UnitOfWork and are orchestrated
+from Application Use Cases.
+
+==================================================
+FINANCIAL MONEY RULE
+==================================================
+
+Never calculate money using normal JavaScript floating-point Number.
+
+Use:
+
+decimal.js
+
+For example:
+
+new Decimal("1000.25")
+
+Database:
+
+DECIMAL
+
+Sequelize may return DECIMAL values as strings.
+
+Preserve that precision.
+
+Never convert DECIMAL financial values to Number just for convenience.
+
+==================================================
+TRANSFER FLOW
+==================================================
+
+POST:
+
+/api/v1/movements/transfers
+
+Frontend sends source data only.
+
+Frontend MUST NOT send generated journal entries.
+
+Example:
+
+{
+  "statement": "حوالة من أحمد إلى محمد",
+
+  "transferAmount": "1000.0000",
+  "transferCurrencyId": "1",
+
+  "fromClientId": "10",
+  "fromCurrencyId": "1",
+  "fromExchangeRate": "1",
+
+  "feeUs": "10",
+
+  "toClientId": "25",
+  "toCurrencyId": "1",
+  "toExchangeRate": "1",
+
+  "feeThem": "2",
+
+  "descriptionUs": "بيان لنا",
+  "descriptionThem": "بيان علينا"
+}
+
+Backend flow:
+
+Validate Request
+
+↓
+
+CreateTransfer Use Case
+
+↓
+
+Validate Movement Type TRANSFER
+
+↓
+
+Validate From Client
+
+↓
+
+Validate To Client
+
+↓
+
+Validate Currencies
+
+↓
+
+Calculate totals
+
+↓
+
+UnitOfWork
+
+↓
+
+Create Movement
+
+↓
+
+Create TransferDetails
+
+↓
+
+Generate JournalEntries
+
+↓
+
+Calculate movement result
+
+↓
+
+Update movement
+
+↓
+
+COMMIT
+
+If anything fails:
+
+ROLLBACK ALL
+
+==================================================
+SETTLEMENT FLOW
+==================================================
+
+POST:
+
+/api/v1/movements/settlements
+
+Creates:
+
+movements
+
++
+
+journal_entries
+
+No settlement_details table.
+
+==================================================
+MULTI MOVEMENT
+==================================================
+
+POST:
+
+/api/v1/movements/multi
+
+Do NOT create:
+
+multiple_movement_details
+
+Frontend sends entries.
+
+Backend validates them.
+
+Create:
+
+movements
+
++
+
+journal_entries
+
+within a single transaction.
+
+==================================================
+RECEIPT
+==================================================
+
+POST:
+
+/api/v1/movements/receipts
+
+Creates:
+
+movement
+
+receipt_payment_details
+
+journal_entries
+
+==================================================
+PAYMENT
+==================================================
+
+POST:
+
+/api/v1/movements/payments
+
+Creates:
+
+movement
+
+receipt_payment_details
+
+journal_entries
+
+==================================================
+EXCHANGE
+==================================================
+
+POST:
+
+/api/v1/movements/exchanges
+
+Creates:
+
+movement
+
+exchange_details
+
+journal_entries
+
+within one atomic transaction.
+
+==================================================
+SOURCE OF TRUTH
+==================================================
+
+journal_entries is the financial source of truth
+for POSTED financial movements.
+
+Do NOT add:
+
+balance
+
+to clients as the authoritative balance.
+
+Client balances are calculated from journal_entries.
+
+==================================================
+CLIENT BALANCE
+==================================================
+
+Create:
+
+BalanceCalculationService
+
+Balance rules MUST exist in one place.
+
+Never duplicate balance equations across:
+
+Controllers
+Repositories
+Use Cases
+
+==================================================
+CLIENT STATEMENT
+==================================================
+
+GET:
+
+/api/v1/clients/:id/statement
+
+Filters:
+
+currency_id
+date_from
+date_to
+movement_type_id
+page
+limit
+
+Return:
+
+client
+currency
+openingBalance
+entries
+totalUs
+totalThem
+closingBalance
+pagination
+
+Each entry:
+
+movementId
+movementNo
+movementType
+date
+time
+description
+amount
+side
+exchangeRate
+fees
+runningBalance
+
+==================================================
+OPENING BALANCE
+==================================================
+
+opening balance must be calculated from journal entries
+before date_from.
+
+Do NOT automatically assume opening balance = 0.
+
+==================================================
+RUNNING BALANCE ORDER
+==================================================
+
+Stable order:
+
+movement_date
+movement_time
+movement_id
+line_no
+
+==================================================
+JOURNAL API
+==================================================
+
+GET:
+
+/api/v1/journal
+
+Filters:
+
+date_from
+date_to
+client_id
+currency_id
+movement_type_id
+movement_no
+entry_side
+status
+page
+limit
+
+==================================================
+MOVEMENT DETAILS
+==================================================
+
+GET:
+
+/api/v1/movements/:id
+
+Return:
+
+movement
+movementType
+createdBy
+updatedBy
+detail
+journalEntries
+
+Detail based on movement type.
+
+==================================================
+NO FINANCIAL HARD DELETE
+==================================================
+
+NEVER hard-delete POSTED financial movements.
+
+Forbidden:
+
+MovementModel.destroy({
+  where: ...
+})
+
+for posted financial records.
+
+Use status workflow.
+
+==================================================
+CANCELLATION
+==================================================
+
+POST:
+
+/api/v1/movements/:id/cancel
+
+Do not erase historical records.
+
+==================================================
+REVERSAL
+==================================================
+
+POST:
+
+/api/v1/movements/:id/reverse
+
+Original journal entries remain unchanged.
+
+Create a new reverse movement.
+
+US becomes THEM.
+
+THEM becomes US.
+
+If extra database fields are required to link reversal to original,
+DO NOT add them silently.
+
+Explain first.
+
+==================================================
+FRONTEND TRUST RULE
+==================================================
+
+Never trust frontend calculations.
+
+Frontend MUST NOT control:
+
+movementNo
+createdBy
+totalResult
+generated journal entries
+system timestamps
+financial result
+
+Backend owns these.
+
+==================================================
+MOVEMENT NUMBER
+==================================================
+
+Never use unsafe:
+
+MAX(movement_no) + 1
+
+without locking/concurrency control.
+
+movement_no MUST be unique.
+
+Design concurrency-safe number generation.
+
+If using id_movement is sufficient, explain why.
+
+==================================================
+INDEXES
+==================================================
+
+Create indexes for:
+
+movements:
+
+movement_no
+movement_date
+movement_type_id
+client_id
+created_by
+status
+
+journal_entries:
+
+movement_id
+client_id
+currency_id
+
+composite:
+
+client_id + currency_id + movement_date
+
+movement_date + movement_id
+
+unique:
+
+movement_id + line_no
+
+transfer_details:
+
+from_client_id
+to_client_id
+
+==================================================
+REFERENTIAL ACTIONS
+==================================================
+
+Financial historical records must not disappear.
+
+Do NOT blindly use:
+
+ON DELETE CASCADE
+
+for financial tables.
+
+Use RESTRICT / NO ACTION where appropriate.
+
+==================================================
+CLIENT DEACTIVATION
+==================================================
+
+Clients used in historical movements must not be deleted.
+
+Use:
+
+is_active = false
+
+Inactive clients cannot be used for new financial movements.
+
+==================================================
+CURRENCY DEACTIVATION
+==================================================
+
+Used currencies must remain historically available.
+
+Set:
+
+is_active = false
+
+instead of deletion.
+
+==================================================
+AUTHENTICATION
+==================================================
+
+POST:
+
+/api/v1/auth/login
+
+Use:
+
+bcrypt
+JWT
+
+Never expose password_hash.
+
+==================================================
+AUTHORIZATION
+==================================================
+
+Roles:
+
+ADMIN
+MANAGER
+ACCOUNTANT
+EMPLOYEE
+VIEWER
+
+Support permission names such as:
+
+movement.create
+movement.view
+movement.cancel
+movement.reverse
+journal.view
+client.create
+client.update
+currency.manage
+admin.manage
+
+==================================================
+ZOD
+==================================================
+
+Use Zod in Presentation for:
+
+shape
+type
+required fields
+formats
+
+Business validation belongs in:
+
+Application / Domain.
+
+==================================================
+ERROR RESPONSE
+==================================================
+
+Standard error:
+
+{
+  "success": false,
+  "error": {
+    "code": "CLIENT_NOT_FOUND",
+    "message": "Client not found",
+    "details": null
+  }
+}
+
+Never expose raw Sequelize database errors.
+
+==================================================
+SEQUELIZE ERROR MAPPING
+==================================================
+
+Map:
+
+SequelizeUniqueConstraintError
+
+→ ConflictError
+
+SequelizeForeignKeyConstraintError
+
+→ Validation / Domain error
+
+SequelizeValidationError
+
+→ ValidationError
+
+DatabaseConnectionError
+
+→ Infrastructure error
+
+Log technical details.
+
+Return safe messages to clients.
+
+==================================================
+PAGINATION
+==================================================
+
+Default:
+
+page = 1
+limit = 20
+
+Maximum:
+
+100
+
+==================================================
+ENV
+==================================================
+
+.env.example:
+
+NODE_ENV=development
+
+PORT=3000
+
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=
+DB_USER=
+DB_PASSWORD=
+
+JWT_SECRET=
+JWT_EXPIRES_IN=8h
+
+BCRYPT_ROUNDS=12
+
+CORS_ORIGIN=
+
+LOG_LEVEL=info
+
+==================================================
+CONFIG
+==================================================
+
+Validate environment variables using Zod.
+
+Fail Fast on invalid configuration.
+
+==================================================
+SEEDS
+==================================================
+
+Create seeders for:
+
+Currencies:
+
+USD
+SYP
+EUR
+TRY
+SAR
+
+Movement Types:
+
+TRANSFER
+SETTLEMENT
+MULTI
+RECEIPT
+PAYMENT
+EXCHANGE
+
+Optional initial admin.
+
+Hash password before seed.
+
+==================================================
+TESTS
+==================================================
+
+Unit tests:
+
+Money
+ExchangeRate
+BalanceCalculationService
+TransferCalculationService
+CreateTransfer
+CreateExchange
+CreateSettlement
+CreateMultiMovement
+ClientBalance
+ClientStatement
+
+Integration tests:
+
+Sequelize Repositories
+Database relations
+Transactions
+
+E2E:
+
+Login
+Create Client
+Create Transfer
+Create Settlement
+Create Multi Movement
+Create Receipt
+Create Payment
+Create Exchange
+Journal
+Statement
+Balances
+Cancel
+Reverse
+
+==================================================
+ROLLBACK TEST
+==================================================
+
+Mandatory test:
+
+Create movement succeeds.
+
+Transfer detail fails.
+
+Expected:
+
+movement does NOT remain.
+
+transfer detail does NOT remain.
+
+journal entries do NOT remain.
+
+==================================================
+NO N+1
+==================================================
+
+Avoid N+1 queries.
+
+Use:
+
+include
+
+only where needed.
+
+Use:
+
+attributes
+
+to select only needed columns.
+
+Use pagination.
+
+==================================================
+LOGGING
+==================================================
+
+Use structured logging.
+
+Never log:
+
+passwords
+JWT tokens
+password hashes
+
+Include when useful:
+
+requestId
+adminId
+movementId
+movementNo
+errorCode
+
+==================================================
+README
+==================================================
+
+README must explain:
+
+Project overview
+Architecture
+Folder structure
+Database schema
+Sequelize
+Migrations
+Seeders
+Transactions
+Financial movement flow
+Transfer flow
+Journal
+Client balances
+Statements
+Authentication
+Authorization
+Testing
+Deployment
+
+==================================================
+IMPLEMENTATION ORDER
+==================================================
+
+PHASE 1
+Read role.md
+
+PHASE 2
+Architecture review
+
+PHASE 3
+Project initialization
+
+PHASE 4
+Domain layer
+
+PHASE 5
+Application ports
+
+PHASE 6
+Sequelize configuration
+
+PHASE 7
+Migrations
+
+PHASE 8
+Models
+
+PHASE 9
+Associations
+
+PHASE 10
+Seeders
+
+PHASE 11
+Mappers
+
+PHASE 12
+Repositories
+
+PHASE 13
+UnitOfWork
+
+PHASE 14
+Dependency Injection
+
+PHASE 15
+Authentication
+
+PHASE 16
+Master data
+
+PHASE 17
+Transfer
+
+PHASE 18
+Settlement
+
+PHASE 19
+Multi Movement
+
+PHASE 20
+Receipt
+
+PHASE 21
+Payment
+
+PHASE 22
+Exchange
+
+PHASE 23
+Journal
+
+PHASE 24
+Balances
+
+PHASE 25
+Statements
+
+PHASE 26
+Cancel
+
+PHASE 27
+Reverse
+
+PHASE 28
+Notifications
+
+PHASE 29
+Tests
+
+PHASE 30
+README
+
+PHASE 31
+Final rule audit
+
+==================================================
+FINAL RULE
+==================================================
+
+Before completing any task:
+
+Re-read the relevant rules from role.md.
+
+Check:
+
+Did I add an unapproved table?
+
+Did I create accounts?
+
+Did I bypass a Use Case?
+
+Did I call Sequelize from Controller?
+
+Did I expose Sequelize to Domain?
+
+Did I calculate money with Number?
+
+Did I trust frontend journal data?
+
+Did I create financial records outside a transaction?
+
+Did I hard-delete financial data?
+
+Did I alter a business rule without approval?
+
+If YES to any:
+
+STOP.
+
+Fix the implementation before finishing.
+واريد role.md 
+هذا الملف يكون مرجع إلزامي لأي AI Agent يشتغل على المشروع، ويحدد:
+
+ما المسموح.
+ما الممنوع.
+الجداول الثابتة.
+قواعد الـClean Architecture.
+قواعد Sequelize.
+قواعد الحركات المالية.
+طريقة إنشاء القيود.
+قواعد الـTransactions.
+قواعد تعديل الـSchema.
+قواعد كتابة الكود.
+قواعد الاختبارات.
+متى يجب على الـAI أن يتوقف ويطلب موافقة.
+وما الذي يستطيع تغييره من تلقاء نفسه.

@@ -1,0 +1,423 @@
+{
+  "info": {
+    "name": "Mizan Financial API",
+    "description": "مجموعة اختبار Backend ميزان. شغّل Login أولًا لحفظ JWT تلقائيًا. أنشئ عميلين واضبط fromClientId وtoClientId قبل اختبار الحوالة.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:3000/api/v1" },
+    { "key": "fullName", "value": "مدير النظام" },
+    { "key": "password", "value": "StrongPassword123" },
+    { "key": "token", "value": "" },
+    { "key": "adminId", "value": "1" },
+    { "key": "managedAdminId", "value": "999999" },
+    { "key": "groupId", "value": "1" },
+    { "key": "clientId", "value": "1" },
+    { "key": "fromClientId", "value": "1" },
+    { "key": "toClientId", "value": "2" },
+    { "key": "usdCurrencyId", "value": "1" },
+    { "key": "sypCurrencyId", "value": "2" },
+    { "key": "testCurrencyId", "value": "6" },
+    { "key": "movementId", "value": "1" },
+    { "key": "cancelMovementId", "value": "999999" },
+    { "key": "notificationId", "value": "14" }
+  ],
+  "item": [
+    {
+      "name": "Health and Authentication",
+      "item": [
+        {
+          "name": "Health",
+          "auth": { "type": "noauth" },
+          "request": { "method": "GET", "url": "http://127.0.0.1:3000/health" },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('Health is OK', () => pm.response.to.have.status(200));"] }
+            }
+          ]
+        },
+        {
+          "name": "Login - saves JWT",
+          "auth": { "type": "noauth" },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"{{fullName}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login succeeds', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.success && json.data?.token) {",
+                  "  pm.collectionVariables.set('token', json.data.token);",
+                  "  pm.collectionVariables.set('adminId', json.data.admin.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admins",
+      "item": [
+        { "name": "List Admins", "request": { "method": "GET", "url": "{{baseUrl}}/admins?page=1&limit=20" } },
+        {
+          "name": "Create Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"محاسب تجريبي\",\n  \"phone\": \"0500000000\",\n  \"email\": \"demo.accountant@example.com\",\n  \"password\": \"StrongPassword123\",\n  \"role\": \"ACCOUNTANT\",\n  \"permissions\": [\"movement.create\", \"movement.view\", \"journal.view\"],\n  \"isDeveloper\": false,\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/admins"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) pm.collectionVariables.set('managedAdminId', json.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deactivate Managed Admin",
+          "request": { "method": "PATCH", "url": "{{baseUrl}}/admins/{{managedAdminId}}/deactivate" }
+        }
+      ]
+    },
+    {
+      "name": "Client Groups",
+      "item": [
+        { "name": "List Groups", "request": { "method": "GET", "url": "{{baseUrl}}/client-groups?page=1&limit=20" } },
+        {
+          "name": "Create Group - saves ID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"مجموعة الاختبار\",\n  \"description\": \"أنشئت من Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/client-groups"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) pm.collectionVariables.set('groupId', json.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Group",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"تم التعديل من Postman\"\n}" },
+            "url": "{{baseUrl}}/client-groups/{{groupId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clients",
+      "item": [
+        { "name": "List Clients", "request": { "method": "GET", "url": "{{baseUrl}}/clients?page=1&limit=20" } },
+        {
+          "name": "Create Client - saves ID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"CL-POSTMAN-001\",\n  \"groupId\": \"{{groupId}}\",\n  \"fullName\": \"عميل بوستمان الأول\",\n  \"phone\": \"0501111111\",\n  \"email\": \"client.one@example.com\",\n  \"address\": \"الرياض - حي الاختبار\",\n  \"importance\": 100\n}"
+            },
+            "url": "{{baseUrl}}/clients"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) { pm.collectionVariables.set('clientId', json.data.id); pm.collectionVariables.set('fromClientId', json.data.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Second Client - saves toClientId",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"CL-POSTMAN-002\",\n  \"groupId\": \"{{groupId}}\",\n  \"fullName\": \"عميل بوستمان الثاني\",\n  \"phone\": \"0502222222\",\n  \"email\": \"client.two@example.com\",\n  \"address\": \"جدة - حي الاختبار\",\n  \"importance\": 200\n}"
+            },
+            "url": "{{baseUrl}}/clients"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) pm.collectionVariables.set('toClientId', json.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Client",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"importance\": 50\n}" },
+            "url": "{{baseUrl}}/clients/{{clientId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Currencies and Movement Types",
+      "item": [
+        { "name": "List Currencies", "request": { "method": "GET", "url": "{{baseUrl}}/currencies?page=1&limit=20" } },
+        {
+          "name": "Create Currency",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Currency\",\n  \"code\": \"PMT\",\n  \"symbol\": \"P\",\n  \"decimalPlaces\": 2,\n  \"textIcon\": \"P\",\n  \"importance\": 100,\n  \"exchangeRate\": \"1.00000000\",\n  \"exchangeType\": \"FROM_USD_MULTIPLY\",\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/currencies"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) pm.collectionVariables.set('testCurrencyId', json.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Currency Icon",
+          "request": {
+            "method": "PATCH",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "icon", "type": "file", "src": "" }]
+            },
+            "url": "{{baseUrl}}/currencies/{{testCurrencyId}}/icon"
+          }
+        },
+        {
+          "name": "List Movement Types",
+          "request": { "method": "GET", "url": "{{baseUrl}}/movement-types?page=1&limit=20" }
+        }
+      ]
+    },
+    {
+      "name": "Financial Movements",
+      "item": [
+        {
+          "name": "Create Transfer - saves movementId",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statement\": \"حوالة اختبار\",\n  \"transferAmount\": \"1000.0000\",\n  \"transferCurrencyId\": \"{{usdCurrencyId}}\",\n  \"fromClientId\": \"{{fromClientId}}\",\n  \"fromCurrencyId\": \"{{usdCurrencyId}}\",\n  \"fromExchangeRate\": \"1\",\n  \"feeUs\": \"10\",\n  \"toClientId\": \"{{toClientId}}\",\n  \"toCurrencyId\": \"{{usdCurrencyId}}\",\n  \"toExchangeRate\": \"1\",\n  \"feeThem\": \"2\",\n  \"descriptionUs\": \"بيان لنا\",\n  \"descriptionThem\": \"بيان علينا\"\n}"
+            },
+            "url": "{{baseUrl}}/movements/transfers"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) {",
+                  "  pm.collectionVariables.set('movementId', json.data.movement.id);",
+                  "  pm.collectionVariables.set('cancelMovementId', json.data.movement.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Settlement",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"تسوية اختبار\",\n  \"entries\": [\n    { \"clientId\": \"{{fromClientId}}\", \"currencyId\": \"{{usdCurrencyId}}\", \"amount\": \"100\", \"side\": \"US\" },\n    { \"clientId\": \"{{toClientId}}\", \"currencyId\": \"{{usdCurrencyId}}\", \"amount\": \"100\", \"side\": \"THEM\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/movements/settlements"
+          }
+        },
+        {
+          "name": "Create Multi Movement",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"حركة متعددة\",\n  \"entries\": [\n    { \"clientId\": \"{{fromClientId}}\", \"currencyId\": \"{{usdCurrencyId}}\", \"amount\": \"50\", \"side\": \"US\" },\n    { \"clientId\": \"{{toClientId}}\", \"currencyId\": \"{{usdCurrencyId}}\", \"amount\": \"50\", \"side\": \"THEM\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/movements/multi"
+          }
+        },
+        {
+          "name": "Create Receipt (backend derives THEM)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statement\": \"سند قبض اختبار\",\n  \"clientId\": \"{{clientId}}\",\n  \"currencyId\": \"{{usdCurrencyId}}\",\n  \"amount\": \"300.0000\"\n}"
+            },
+            "url": "{{baseUrl}}/movements/receipts"
+          }
+        },
+        {
+          "name": "Create Payment (backend derives US)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statement\": \"سند دفع اختبار\",\n  \"clientId\": \"{{clientId}}\",\n  \"currencyId\": \"{{usdCurrencyId}}\",\n  \"amount\": \"200.0000\"\n}"
+            },
+            "url": "{{baseUrl}}/movements/payments"
+          }
+        },
+        {
+          "name": "Create Exchange",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"fromCurrencyId\": \"{{usdCurrencyId}}\",\n  \"fromAmount\": \"1000.0000\",\n  \"toCurrencyId\": \"{{sypCurrencyId}}\",\n  \"toAmount\": \"12500000.0000\",\n  \"exchangeRate\": \"12500.00000000\",\n  \"description\": \"تصريف اختبار\"\n}"
+            },
+            "url": "{{baseUrl}}/movements/exchanges"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Exchange created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Exchange totals follow locked direction', () => {",
+                  "  pm.expect(json.success).to.eql(true);",
+                  "  pm.expect(json.data.detail.totalUs).to.eql('12500000.0000');",
+                  "  pm.expect(json.data.detail.totalThem).to.eql('1000.0000');",
+                  "  pm.expect(json.data.detail.profitLoss).to.eql('0.0000');",
+                  "});",
+                  "if (json.success) pm.collectionVariables.set('movementId', json.data.movement.id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Journal and Statements",
+      "item": [
+        {
+          "name": "Journal",
+          "request": { "method": "GET", "url": "{{baseUrl}}/journal?page=1&limit=20&status=POSTED" }
+        },
+        {
+          "name": "Client Statement",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/clients/{{clientId}}/statement?currency_id={{usdCurrencyId}}&page=1&limit=20"
+          }
+        },
+        { "name": "Movement Details", "request": { "method": "GET", "url": "{{baseUrl}}/movements/{{movementId}}" } }
+      ]
+    },
+    {
+      "name": "Movement Lifecycle",
+      "item": [
+        {
+          "name": "Cancel Movement (set cancelMovementId first)",
+          "request": { "method": "POST", "url": "{{baseUrl}}/movements/{{cancelMovementId}}/cancel" }
+        },
+        {
+          "name": "Reverse Movement - saves reverse ID",
+          "request": { "method": "POST", "url": "{{baseUrl}}/movements/{{movementId}}/reverse" },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) pm.collectionVariables.set('movementId', json.data.reverseMovement.id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": { "method": "GET", "url": "{{baseUrl}}/notifications?page=1&limit=20" },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const first = json.data?.notifications?.[0];",
+                  "if (first) pm.collectionVariables.set('notificationId', first.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": { "method": "PATCH", "url": "{{baseUrl}}/notifications/{{notificationId}}/read" }
+        }
+      ]
+    }
+  ]
+}
