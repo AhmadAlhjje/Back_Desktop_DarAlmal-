@@ -12,6 +12,8 @@ export const sequelize = new Sequelize({
   password: env.DB_PASSWORD,
   models: Object.values(models),
   logging: env.DB_LOGGING === 'true' ? console.debug : false,
+  // Movement ids are random 63-bit values (> Number.MAX_SAFE_INTEGER); keep every BIGINT as a string.
+  dialectOptions: { supportBigNumbers: true, bigNumberStrings: true, decimalNumbers: false },
   define: { freezeTableName: true, underscored: true },
 });
 configureAssociations();

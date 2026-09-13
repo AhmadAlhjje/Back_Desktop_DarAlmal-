@@ -18,7 +18,10 @@ export interface ClientGroup {
   id: string;
   name: string;
   description: string | null;
+  /** مشتق للقراءة فقط: عدد العملاء في المجموعة. */
+  clientsCount?: number;
 }
+export type ClientAccountType = 'CLIENT' | 'BOX';
 export interface Client {
   id: string;
   code: string;
@@ -28,7 +31,28 @@ export interface Client {
   email: string | null;
   address: string | null;
   importance: number;
+  /** عميل أو صندوق (قرار ج1). */
+  accountType: ClientAccountType;
+  /** حساب نظامي مبذور: لا يُحذف ولا يُؤرشف. */
+  isSystem: boolean;
+  /** الحساب المعيّن كحساب الصندوق لسندات القبض والدفع (واحد على الأكثر). */
+  isCashBox: boolean;
+  /** حساب سرّي: يظهر لدور ADMIN فقط. */
+  isSecret: boolean;
+  /** ISO timestamp للأرشفة، أو null إن كان نشطاً. */
+  archivedAt: string | null;
+  /** ISO timestamp لآخر تدوير أرصدة، أو null. */
+  lastRolloverAt: string | null;
+  /** مشتق للقراءة فقط (من الربط بالمجموعة). */
+  groupName?: string | null;
+  /** مشتق للقراءة فقط: عدد الحركات المرحّلة التي يظهر فيها العميل («حجم العمل»). */
+  movementsCount?: number;
 }
+/** الحقول التي تُنشأ/تُعدَّل من الواجهة (الأعلام لها نقاط مخصصة). */
+export type ClientInput = Omit<
+  Client,
+  'id' | 'isSystem' | 'isCashBox' | 'isSecret' | 'archivedAt' | 'lastRolloverAt' | 'groupName' | 'movementsCount'
+>;
 export interface Currency {
   id: string;
   name: string;
@@ -110,6 +134,8 @@ export interface Exchange {
   totalUs: string;
   totalThem: string;
   profitLoss: string;
+  /** صندوق الأرباح والخسائر المختار (second_client_id) — للعرض والتقارير فقط. */
+  profitLossClientId?: string | null;
 }
 export interface ReceiptPayment {
   id?: string;
@@ -128,4 +154,6 @@ export interface Notification {
   type: string | null;
   movementId: string | null;
   isRead: boolean;
+  /** ISO timestamp (للقراءة فقط). */
+  createdAt?: string;
 }

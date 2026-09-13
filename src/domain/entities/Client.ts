@@ -1,1 +1,1 @@
-export type { Client } from './types.js';
+export type { Client, ClientAccountType, ClientInput } from './types.js';

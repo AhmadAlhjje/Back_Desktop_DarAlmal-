@@ -8,4 +8,5 @@ export class NotificationModel extends Model {
   @Column(DataType.STRING(50)) declare notification_type: string | null;
   @Column(DataType.BIGINT.UNSIGNED) declare movement_id: string | null;
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false }) declare is_read: boolean;
+  declare created_at: Date;
 }

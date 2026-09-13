@@ -11,5 +11,7 @@ export const exchangeSchema = z
     toAmount: amount,
     exchangeRate: rate,
     description: z.string().optional(),
+    /** صندوق الأرباح والخسائر الذي تُنسب إليه نتيجة التصريف (اختياري — افتراضياً حساب SYS-PNL في الواجهة). */
+    profitLossClientId: id.optional(),
   })
   .strict();

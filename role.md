@@ -74,9 +74,30 @@
 - `RECEIPT` (العميل يعطينا): اتجاه القيد `THEM`.
 - `PAYMENT` (نحن نعطي العميل): اتجاه القيد `US`.
 - في `EXCHANGE`: `fromCurrency/fromAmount` مستلمة من العميل واتجاهها `THEM`، و`toCurrency/toAmount` مسلمة للعميل واتجاهها `US`.
+- في `TRANSFER` (معتمد 2026-09-12): «من حساب» `fromClient` يُقيَّد `US` بمبلغ `total_us` (لنا عليه)، و«إلى حساب» `toClient` يُقيَّد `THEM` بمبلغ `total_them` (علينا لصالحه). نفس اتجاه التسوية: الطرف الأول لنا والثاني علينا.
 - يشتق Backend العمود المالي الذي يملؤه تلقائيًا من نوع الحركة، ويمنع على Frontend إرسال `amount_us` أو `amount_them` للحركات ذات الاتجاه المولد.
 - تطبق القاعدة نفسها في CreateReceipt وCreatePayment وCreateExchange وBalanceCalculationService وJournalGenerationService وكشف ورصيد العميل.
 - يمنع تغيير هذه الاتجاهات دون موافقة أعمال صريحة.
+
+## تقييم الأرصدة بالدولار — معتمد 2026-09-13
+
+- المعادلة في مكان واحد: `domain/services/BalanceValuationService.ts`.
+- `FROM_USD_MULTIPLY`: valuedUsd = amount ÷ exchange_rate. `TO_USD_DIVIDE`: valuedUsd = amount × exchange_rate.
+- تُستخدم في `GET /clients/:id/balances` و`GET /reports/balance-sheet` و`GET /dashboard` فقط؛ الفرونت يعرض القيم ولا يعيد حسابها.
+- الميزانية العامة: `mode=valued` (الصندوق المقوّم: صف لكل حساب بالدولار) / `mode=currency` (صندوق العملات: صف لكل عملة)، و`detail=simple` (الحسابات ذات الرصيد فقط) / `detail=full` (الكل).
+
+## أعلام الحساب والحسابات النظامية والإشعارات — معتمد 2026-09-13
+
+- أُضيفت إلى `clients` (migration `20260913000100-client-account-flags`) الحقول: `account_type ENUM('CLIENT','BOX')`، `is_system`، `is_cash_box`، `is_secret`، `archived_at`، `last_rollover_at`. لا تغيير على القيود المالية.
+- الحسابات النظامية (seeder `20260913000100-system-accounts`): `SYS-CASH` «الصندوق الرئيسي» (حساب الصندوق الافتراضي) و`SYS-PNL` «أرباح وخسائر التصريف». لا تُحذف ولا تُؤرشف ولا يتغير رمزها أو نوعها (`SYSTEM_CLIENT_PROTECTED`).
+- الأرشفة `PATCH /clients/:id/archive {archived}`: تتطلب رصيداً صفرياً في كل العملات (`ARCHIVE_NON_ZERO_BALANCE`)، تُلغي تعيين الصندوق، والمؤرشف لا يظهر في `GET /clients` إلا مع `?archived=true`.
+- حساب الصندوق واحد على الأكثر (`PATCH /clients/:id/set-cash-box` يلغي غيره؛ `GET /clients/cash-box`). الحساب السرّي (`PATCH /clients/:id/set-secret`) يظهر في `GET /clients` و`/reports/balance-sheet` لدور ADMIN فقط.
+- الحذف `DELETE /clients/:id` مسموح فقط لحساب بلا أي قيد يومية (`CLIENT_HAS_MOVEMENTS`)؛ ما له تاريخ مالي يُؤرشف.
+- «تدوير الأرصدة» `PATCH /clients/:id/rollover`: يثبّت `last_rollover_at` كبداية افتراضية لكشوف الحساب دون أي قيد أو حذف؛ الرصيد الافتتاحي يُحسب من القيود السابقة كما هو.
+- الإشعارات (`NotifyAdmins`): كل عملية (إنشاء حركة/إلغاء/عكس، عميل، إداري، أرشفة، تدوير، تصفير) تُوزَّع على كل الإداريين النشطين؛ فشل الإشعار لا يفشل العملية.
+- `POST /system/reset-data {password, confirmation:'تصفير'}` (ADMIN فقط): يحذف القيود والحركات وتفاصيلها والإشعارات والعملاء غير النظاميين ومجموعاتهم داخل معاملة واحدة؛ يبقى الإداريون والعملات وأنواع الحركات والحسابات النظامية.
+- `DELETE /auth/me {password}`: يعطّل حساب الإداري الحالي (لا يحذف الصف) ويمنع تعطيل آخر ADMIN نشط (`LAST_ADMIN`).
+- كشف الحساب وقيود اليومية تعيد `createdById/createdByName` للعرض.
 
 ## الأمان وجودة الكود
 

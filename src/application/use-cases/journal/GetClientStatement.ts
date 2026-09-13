@@ -33,6 +33,8 @@ export class GetClientStatement {
         date: entry.movementDate,
         time: entry.movementTime,
         description: entry.description,
+        createdById: entry.createdById,
+        createdByName: entry.createdByName,
         amount: entry.amount,
         side: entry.side,
         exchangeRate: entry.exchangeRate,

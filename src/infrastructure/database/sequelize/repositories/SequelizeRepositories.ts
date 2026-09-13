@@ -1,4 +1,8 @@
-import { fn, col, Op, type Transaction, type WhereOptions } from 'sequelize';
+import { fn, col, literal, Op, type Transaction, type WhereOptions } from 'sequelize';
+import { sequelize } from '../sequelize.js';
+
+/** تهريب قيمة نصية للاستخدام داخل `literal` (يُنتج نصاً مقتبساً آمناً). */
+const sequelizeEscape = (value: string): string => sequelize.escape(value);
 import { Decimal } from 'decimal.js';
 import type { Repositories } from '../../../../application/ports/repositories/types.js';
 import { AdminMapper } from '../mappers/AdminMapper.js';
@@ -30,9 +34,12 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       model: MovementModel,
       as: 'movement',
       required: true,
-      attributes: ['movement_no', 'movement_type_id', 'status', 'created_at'],
+      attributes: ['movement_no', 'movement_type_id', 'status', 'created_at', 'created_by'],
       where: movementWhere,
-      include: [{ model: MovementTypeModel, as: 'movementType', attributes: ['movement_code'] }],
+      include: [
+        { model: MovementTypeModel, as: 'movementType', attributes: ['movement_code'] },
+        { model: AdminModel, as: 'creator', attributes: ['id_admin', 'full_name'], required: false },
+      ],
     },
   ];
   const journalWhere = (
@@ -54,11 +61,54 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       },
     }),
   });
+  /** شروط سجل الحركات؛ `alias` هو اسم جدول الحركات في الاستعلام (MovementModel أو movement). */
+  const movementListWhere = (
+    f: import('../../../../application/ports/repositories/types.js').MovementListFilters,
+    alias: string,
+  ): WhereOptions => {
+    const esc = (v: string) => sequelizeEscape(`%${v}%`);
+    const and: WhereOptions[] = [];
+    if (f.movementTypeId) and.push({ movement_type_id: f.movementTypeId });
+    if (f.status) and.push({ status: f.status });
+    if (f.movementNo) and.push({ movement_no: f.movementNo });
+    if (f.createdBy) and.push({ created_by: f.createdBy });
+    if (f.dateFrom || f.dateTo)
+      and.push({
+        created_at: {
+          ...(f.dateFrom && { [Op.gte]: `${f.dateFrom} 00:00:00` }),
+          ...(f.dateTo && { [Op.lte]: `${f.dateTo} 23:59:59` }),
+        },
+      });
+    if (f.clientId)
+      and.push(
+        literal(
+          `EXISTS (SELECT 1 FROM journal_entries je WHERE je.movement_id = \`${alias}\`.\`id_movement\` AND je.client_id = ${sequelizeEscape(f.clientId)})`,
+        ),
+      );
+    if (f.q && f.q.trim()) {
+      const like = esc(f.q.trim());
+      const noMatch = /^\d+$/.test(f.q.trim()) ? ` OR \`${alias}\`.\`movement_no\` = ${sequelizeEscape(f.q.trim())}` : '';
+      and.push(
+        literal(
+          `(EXISTS (SELECT 1 FROM journal_entries je JOIN clients c ON c.id_client = je.client_id JOIN currencies cu ON cu.id_currency = je.currency_id WHERE je.movement_id = \`${alias}\`.\`id_movement\` AND (c.full_name LIKE ${like} OR cu.currency_name LIKE ${like} OR cu.currency_code LIKE ${like} OR je.description LIKE ${like}))` +
+            ` OR EXISTS (SELECT 1 FROM admins a WHERE a.id_admin = \`${alias}\`.\`created_by\` AND a.full_name LIKE ${like})` +
+            ` OR EXISTS (SELECT 1 FROM movement_types mt WHERE mt.id_movement_type = \`${alias}\`.\`movement_type_id\` AND mt.movement_name LIKE ${like})` +
+            ` OR EXISTS (SELECT 1 FROM transfer_movements t WHERE t.movement_id = \`${alias}\`.\`id_movement\` AND t.statement LIKE ${like})` +
+            ` OR EXISTS (SELECT 1 FROM exchange_movements x WHERE x.movement_id = \`${alias}\`.\`id_movement\` AND x.statement LIKE ${like})` +
+            ` OR EXISTS (SELECT 1 FROM settlement_movements s WHERE s.movement_id = \`${alias}\`.\`id_movement\` AND s.statement LIKE ${like})` +
+            noMatch +
+            `)`,
+        ),
+      );
+    }
+    return and.length === 0 ? {} : { [Op.and]: and };
+  };
   const toJournalItem = (
     row: JournalEntryModel,
   ): import('../../../../application/ports/repositories/types.js').JournalItem => {
     const movement = row.get('movement') as MovementModel;
     const type = movement.get('movementType') as MovementTypeModel;
+    const creator = movement.get('creator') as AdminModel | null | undefined;
     return {
       id: row.id_day,
       movementId: row.movement_id,
@@ -66,6 +116,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       movementTypeId: movement.movement_type_id,
       movementTypeCode: type.movement_code,
       movementStatus: movement.status,
+      createdById: movement.created_by,
+      createdByName: creator?.full_name ?? null,
       lineNo: Number(row.id_day),
       clientId: row.client_id,
       currencyId: row.currency_id,
@@ -97,6 +149,10 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       async findById(id) {
         const row = await AdminModel.findByPk(id, options);
         return row ? AdminMapper.toDomain(row) : null;
+      },
+      async findAllActive() {
+        const rows = await AdminModel.findAll({ where: { is_active: true }, order: [['id_admin', 'ASC']], ...options });
+        return rows.map((m) => AdminMapper.toDomain(m));
       },
       async findByFullName(fullName) {
         const row = await AdminModel.findOne({ where: { full_name: fullName }, ...options });
@@ -154,6 +210,14 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       },
       async findPage(page, limit) {
         const r = await ClientGroupModel.findAndCountAll({
+          attributes: {
+            include: [
+              [
+                literal('(SELECT COUNT(*) FROM clients c WHERE c.group_id = `ClientGroupModel`.`id_group`)'),
+                'clients_count',
+              ],
+            ],
+          },
           order: [['group_name', 'ASC']],
           offset: (page - 1) * limit,
           limit,
@@ -165,8 +229,16 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             id: m.id_group,
             name: m.group_name,
             description: m.description,
+            clientsCount: Number(m.get('clients_count') ?? 0),
           })),
         };
+      },
+      async countClients(id) {
+        return ClientModel.count({ where: { group_id: id }, ...options });
+      },
+      async delete(id) {
+        const count = await ClientGroupModel.destroy({ where: { id_group: id }, ...options });
+        return count > 0;
       },
       async create(i) {
         const m = await ClientGroupModel.create({ group_name: i.name, description: i.description }, options);
@@ -188,17 +260,45 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         const row = await ClientModel.findByPk(id, options);
         return row ? ClientMapper.toDomain(row) : null;
       },
-      async findPage(page, limit) {
+      async findPage(page, limit, filters = {}) {
+        const where: WhereOptions = {
+          archived_at: filters.archived ? { [Op.ne]: null } : null,
+          ...(filters.includeSecret ? {} : { is_secret: false }),
+        };
         const r = await ClientModel.findAndCountAll({
+          where,
+          attributes: {
+            include: [
+              [
+                literal(
+                  '(SELECT COUNT(DISTINCT je.movement_id) FROM journal_entries je JOIN movements mv ON mv.id_movement = je.movement_id WHERE je.client_id = `ClientModel`.`id_client` AND mv.status = \'POSTED\')',
+                ),
+                'movements_count',
+              ],
+            ],
+          },
+          include: [{ model: ClientGroupModel, as: 'group', attributes: ['group_name'], required: false }],
           order: [
+            ['importance', 'DESC'],
             ['full_name', 'ASC'],
             ['id_client', 'ASC'],
           ],
           offset: (page - 1) * limit,
           limit,
+          distinct: true,
           ...options,
         });
-        return { count: r.count, rows: r.rows.map(ClientMapper.toDomain) };
+        return {
+          count: r.count,
+          rows: r.rows.map((m) => {
+            const group = m.get('group') as ClientGroupModel | null;
+            return {
+              ...ClientMapper.toDomain(m),
+              groupName: group?.group_name ?? null,
+              movementsCount: Number(m.get('movements_count') ?? 0),
+            };
+          }),
+        };
       },
       async create(input) {
         const row = await ClientModel.create(
@@ -210,10 +310,15 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             email: input.email,
             address: input.address,
             importance: input.importance,
+            account_type: input.accountType ?? 'CLIENT',
           },
           options,
         );
         return ClientMapper.toDomain(row);
+      },
+      async findCashBox() {
+        const row = await ClientModel.findOne({ where: { is_cash_box: true, archived_at: null }, ...options });
+        return row ? ClientMapper.toDomain(row) : null;
       },
       async update(id, i) {
         const data = {
@@ -224,11 +329,48 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           ...(i.email !== undefined && { email: i.email }),
           ...(i.address !== undefined && { address: i.address }),
           ...(i.importance !== undefined && { importance: i.importance }),
+          ...(i.accountType !== undefined && { account_type: i.accountType }),
         };
         const [count] = await ClientModel.update(data, { where: { id_client: id }, ...options });
         if (!count) return null;
         const m = await ClientModel.findByPk(id, options);
         return m ? ClientMapper.toDomain(m) : null;
+      },
+      async setCashBox(id) {
+        const target = await ClientModel.findByPk(id, options);
+        if (!target) return null;
+        await ClientModel.update({ is_cash_box: false }, { where: { is_cash_box: true }, ...options });
+        await ClientModel.update({ is_cash_box: true }, { where: { id_client: id }, ...options });
+        const m = await ClientModel.findByPk(id, options);
+        return m ? ClientMapper.toDomain(m) : null;
+      },
+      async setSecret(id, isSecret) {
+        const [count] = await ClientModel.update({ is_secret: isSecret }, { where: { id_client: id }, ...options });
+        if (!count) return null;
+        const m = await ClientModel.findByPk(id, options);
+        return m ? ClientMapper.toDomain(m) : null;
+      },
+      async setArchived(id, archivedAt) {
+        const [count] = await ClientModel.update(
+          { archived_at: archivedAt, ...(archivedAt ? { is_cash_box: false } : {}) },
+          { where: { id_client: id }, ...options },
+        );
+        if (!count) return null;
+        const m = await ClientModel.findByPk(id, options);
+        return m ? ClientMapper.toDomain(m) : null;
+      },
+      async setLastRollover(id, at) {
+        const [count] = await ClientModel.update({ last_rollover_at: at }, { where: { id_client: id }, ...options });
+        if (!count) return null;
+        const m = await ClientModel.findByPk(id, options);
+        return m ? ClientMapper.toDomain(m) : null;
+      },
+      async countJournalEntries(id) {
+        return JournalEntryModel.count({ where: { client_id: id }, ...options });
+      },
+      async delete(id) {
+        const count = await ClientModel.destroy({ where: { id_client: id }, ...options });
+        return count > 0;
       },
     },
     currencyRepository: {
@@ -413,6 +555,105 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             })),
         };
       },
+      async findListPage(filters) {
+        const where = movementListWhere(filters, 'MovementModel');
+        const result = await MovementModel.findAndCountAll({
+          where,
+          include: [
+            { model: MovementTypeModel, as: 'movementType', attributes: ['id_movement_type', 'movement_code', 'movement_name'] },
+            { model: AdminModel, as: 'creator', attributes: ['id_admin', 'full_name'] },
+            {
+              model: JournalEntryModel,
+              as: 'journalEntries',
+              attributes: ['id_day', 'client_id', 'currency_id', 'amount_us', 'amount_them', 'description'],
+              include: [
+                { model: ClientModel, as: 'client', attributes: ['full_name'] },
+                { model: CurrencyModel, as: 'currency', attributes: ['currency_code', 'currency_name', 'decimal_places'] },
+              ],
+            },
+            { model: TransferMovementModel, as: 'transferDetail', attributes: ['statement'] },
+            { model: ExchangeMovementModel, as: 'exchangeDetail', attributes: ['statement'] },
+            { model: SettlementMovementModel, as: 'receiptPaymentDetail', attributes: ['statement'] },
+          ],
+          order: [
+            ['created_at', 'DESC'],
+            ['id_movement', 'DESC'],
+            [{ model: JournalEntryModel, as: 'journalEntries' }, 'id_day', 'ASC'],
+          ],
+          offset: (filters.page - 1) * filters.limit,
+          limit: filters.limit,
+          distinct: true,
+          subQuery: false,
+          ...options,
+        });
+        const totals = (await MovementModel.findAll({
+          attributes: [
+            [fn('COUNT', col('id_movement')), 'c'],
+            [fn('SUM', col('total_result')), 'r'],
+          ],
+          where,
+          raw: true,
+          ...options,
+        })) as unknown as Array<{ c: string | number | null; r: string | null }>;
+        const sides = (await JournalEntryModel.findAll({
+          attributes: [
+            [fn('SUM', col('amount_us')), 'us'],
+            [fn('SUM', col('amount_them')), 'them'],
+          ],
+          include: [
+            { model: MovementModel, as: 'movement', attributes: [], required: true, where: movementListWhere(filters, 'movement') },
+          ],
+          raw: true,
+          ...options,
+        })) as unknown as Array<{ us: string | null; them: string | null }>;
+        return {
+          count: result.count,
+          rows: result.rows.map((row) => {
+            const type = row.get('movementType') as MovementTypeModel;
+            const creator = row.get('creator') as AdminModel;
+            const entries = ((row.get('journalEntries') as JournalEntryModel[]) ?? []).map((e) => {
+              const client = e.get('client') as ClientModel | null;
+              const currency = e.get('currency') as CurrencyModel | null;
+              return {
+                id: e.id_day,
+                clientId: e.client_id,
+                clientName: client?.full_name ?? '',
+                currencyId: e.currency_id,
+                currencyCode: currency?.currency_code ?? '',
+                currencyName: currency?.currency_name ?? '',
+                decimalPlaces: currency?.decimal_places ?? 2,
+                amountUs: e.amount_us,
+                amountThem: e.amount_them,
+                description: e.description,
+              };
+            });
+            const detailStatement =
+              (row.get('transferDetail') as TransferMovementModel | null)?.statement ??
+              (row.get('exchangeDetail') as ExchangeMovementModel | null)?.statement ??
+              (row.get('receiptPaymentDetail') as SettlementMovementModel | null)?.statement ??
+              null;
+            return {
+              id: row.id_movement,
+              movementNo: row.movement_no,
+              movementType: { id: type.id_movement_type, code: type.movement_code, name: type.movement_name },
+              status: row.status as MovementStatus,
+              movementDate: row.created_at.toISOString().slice(0, 10),
+              movementTime: row.movement_time,
+              createdAt: row.created_at.toISOString(),
+              totalResult: row.total_result,
+              statement: detailStatement ?? entries.find((e) => e.description)?.description ?? null,
+              createdBy: { id: creator.id_admin, fullName: creator.full_name },
+              entries,
+            };
+          }),
+          summary: {
+            count: Number(totals[0]?.c ?? 0),
+            totalResult: String(totals[0]?.r ?? '0'),
+            totalUs: String(sides[0]?.us ?? '0'),
+            totalThem: String(sides[0]?.them ?? '0'),
+          },
+        };
+      },
       async updateResult(id, result) {
         await MovementModel.update({ total_result: result }, { where: { id_movement: id }, ...options });
       },
@@ -567,7 +808,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             movement_id: i.movementId,
             statement: null,
             first_client_id: i.clientId,
-            second_client_id: null,
+            second_client_id: i.profitLossClientId ?? null,
             first_currency_id: i.fromCurrencyId,
             second_currency_id: i.toCurrencyId,
             exchange_rate: i.exchangeRate,
@@ -598,6 +839,27 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           options,
         );
         return { ...i, id: m.id_settlement };
+      },
+    },
+    systemRepository: {
+      async resetBusinessData() {
+        // الترتيب يحترم قيود RESTRICT: القيود ← تفاصيل الحركات ← الحركات ← الإشعارات ← العملاء غير النظاميين ← المجموعات.
+        const del = async (sql: string): Promise<number> => {
+          const [, meta] = await sequelize.query(sql, options);
+          const affected = (meta as { affectedRows?: number } | number | undefined) ?? 0;
+          return typeof affected === 'number' ? affected : (affected.affectedRows ?? 0);
+        };
+        const journalEntries = await del('DELETE FROM journal_entries');
+        await del('DELETE FROM transfer_movements');
+        await del('DELETE FROM settlement_movements');
+        await del('DELETE FROM multi_movements');
+        await del('DELETE FROM exchange_movements');
+        const movements = await del('DELETE FROM movements');
+        const notifications = await del('DELETE FROM notifications');
+        const clients = await del('DELETE FROM clients WHERE is_system = 0');
+        const clientGroups = await del('DELETE FROM client_groups');
+        await del('UPDATE clients SET archived_at = NULL, last_rollover_at = NULL WHERE is_system = 1');
+        return { journalEntries, movements, notifications, clients, clientGroups };
       },
     },
     notificationRepository: {
@@ -636,6 +898,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             type: m.notification_type,
             movementId: m.movement_id,
             isRead: m.is_read,
+            createdAt: m.created_at?.toISOString(),
           })),
         };
       },
@@ -645,6 +908,16 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           { where: { id_notification: id, admin_id: adminId }, ...options },
         );
         return count === 1;
+      },
+      async countUnread(adminId) {
+        return NotificationModel.count({ where: { admin_id: adminId, is_read: false }, ...options });
+      },
+      async markAllRead(adminId) {
+        const [count] = await NotificationModel.update(
+          { is_read: true },
+          { where: { admin_id: adminId, is_read: false }, ...options },
+        );
+        return count;
       },
     },
   };

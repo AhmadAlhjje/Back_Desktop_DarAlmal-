@@ -14,6 +14,7 @@ export interface CreateExchangeInput {
   toAmount: string;
   exchangeRate: string;
   description?: string;
+  profitLossClientId?: string;
   createdBy: string;
 }
 export class CreateExchange {
@@ -37,6 +38,12 @@ export class CreateExchange {
       if (!type?.isActive)
         throw new ApplicationError('MOVEMENT_TYPE_NOT_FOUND', 'Active EXCHANGE movement type not found', 404);
       if (!client) throw new ApplicationError('CLIENT_NOT_FOUND', 'Client not found', 404);
+      if (input.profitLossClientId) {
+        const pnl = await r.clientRepository.findById(input.profitLossClientId);
+        if (!pnl) throw new ApplicationError('CLIENT_NOT_FOUND', 'Profit/loss account not found', 404);
+        if (pnl.id === client.id)
+          throw new ApplicationError('SAME_EXCHANGE_CLIENT', 'Profit/loss account must differ from the client', 422);
+      }
       if (!fromCurrency?.isActive || !toCurrency?.isActive)
         throw new ApplicationError('CURRENCY_NOT_FOUND', 'Active currency not found', 404);
       const totals = this.calculator.calculate(input.fromAmount, input.toAmount, input.exchangeRate);
@@ -63,6 +70,7 @@ export class CreateExchange {
         toCurrencyId: input.toCurrencyId,
         toAmount: input.toAmount,
         exchangeRate: input.exchangeRate,
+        profitLossClientId: input.profitLossClientId ?? null,
         ...totals,
       });
       await r.journalRepository.createMany([

@@ -89,6 +89,7 @@ export class CreateTransfer {
         totalThem: totals.totalThem,
         descriptionThem: input.descriptionThem ?? null,
       });
+      // Direction (approved 2026-09-12): "من حساب" is debited to us (US), "إلى حساب" is owed by us (THEM).
       await r.journalRepository.createMany([
         {
           movementId: movement.id,
@@ -96,7 +97,7 @@ export class CreateTransfer {
           clientId: input.fromClientId,
           currencyId: input.fromCurrencyId,
           amount: totals.totalUs,
-          side: EntrySide.THEM,
+          side: EntrySide.US,
           exchangeRate: input.fromExchangeRate,
           fees: input.feeUs ?? '0',
           feePercentage: input.feeUsPercentage ?? null,
@@ -110,7 +111,7 @@ export class CreateTransfer {
           clientId: input.toClientId,
           currencyId: input.toCurrencyId,
           amount: totals.totalThem,
-          side: EntrySide.US,
+          side: EntrySide.THEM,
           exchangeRate: input.toExchangeRate,
           fees: input.feeThem ?? '0',
           feePercentage: input.feeThemPercentage ?? null,

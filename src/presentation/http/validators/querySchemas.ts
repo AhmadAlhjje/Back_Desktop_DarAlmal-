@@ -28,3 +28,27 @@ export const statementQuerySchema = z
   })
   .strict();
 export const paginationQuerySchema = z.object(pagination).strict();
+export const clientsQuerySchema = z.object({ ...pagination, archived: z.enum(['true', 'false']).optional() }).strict();
+export const movementsQuerySchema = z
+  .object({
+    date_from: date.optional(),
+    date_to: date.optional(),
+    movement_type_id: id.optional(),
+    client_id: id.optional(),
+    status: z.enum(['DRAFT', 'POSTED', 'CANCELLED', 'REVERSED']).optional(),
+    movement_no: id.optional(),
+    created_by: id.optional(),
+    q: z.string().max(200).optional(),
+    ...pagination,
+  })
+  .strict();
+export const balancesQuerySchema = z.object({ as_of: date.optional() }).strict();
+export const balanceSheetQuerySchema = z
+  .object({
+    as_of: date.optional(),
+    currency_id: id.optional(),
+    mode: z.enum(['valued', 'currency']).default('valued'),
+    detail: z.enum(['simple', 'full']).default('simple'),
+    q: z.string().max(200).optional(),
+  })
+  .strict();

@@ -8,4 +8,10 @@ export class GetNotifications {
       pagination: { page, limit, total: result.count, pages: Math.ceil(result.count / limit) },
     };
   }
+  async unreadCount(adminId: string) {
+    return { unread: await this.notifications.countUnread(adminId) };
+  }
+  async markAllRead(adminId: string) {
+    return { updated: await this.notifications.markAllRead(adminId) };
+  }
 }

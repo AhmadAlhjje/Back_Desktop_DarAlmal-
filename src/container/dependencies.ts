@@ -14,6 +14,11 @@ import { CreateExchange } from '../application/use-cases/movements/CreateExchang
 import { GetJournal } from '../application/use-cases/journal/GetJournal.js';
 import { GetClientStatement } from '../application/use-cases/journal/GetClientStatement.js';
 import { GetMovementDetails } from '../application/use-cases/movements/GetMovementDetails.js';
+import { ListMovements } from '../application/use-cases/movements/ListMovements.js';
+import { GetClientBalances } from '../application/use-cases/reports/GetClientBalances.js';
+import { GetBalanceSheet } from '../application/use-cases/reports/GetBalanceSheet.js';
+import { GetDashboard } from '../application/use-cases/reports/GetDashboard.js';
+import { SequelizeReportsRepository } from '../infrastructure/database/sequelize/repositories/SequelizeReportsRepository.js';
 import { CancelMovement } from '../application/use-cases/movements/CancelMovement.js';
 import { ReverseMovement } from '../application/use-cases/movements/ReverseMovement.js';
 import { GetNotifications } from '../application/use-cases/notifications/GetNotifications.js';
@@ -24,12 +29,16 @@ import { ManageCurrencies } from '../application/use-cases/currencies/ManageCurr
 import { ManageAdmins } from '../application/use-cases/admins/ManageAdmins.js';
 import { ManageMovementTypes } from '../application/use-cases/movement-types/ManageMovementTypes.js';
 import { PinoLogger } from '../infrastructure/logging/PinoLogger.js';
+import { NotifyAdmins } from '../application/use-cases/notifications/NotifyAdmins.js';
+import { ResetSystemData } from '../application/use-cases/system/ResetSystemData.js';
+import { DeleteOwnAccount } from '../application/use-cases/admins/DeleteOwnAccount.js';
 const logger = new PinoLogger(env.LOG_LEVEL);
 const repositories = createRepositories(undefined, logger);
 const hasher = new BcryptPasswordHasher(env.BCRYPT_ROUNDS);
 export const tokens = new JwtTokenService(env.JWT_SECRET, env.JWT_EXPIRES_IN as never);
 const uow = new SequelizeUnitOfWork(sequelize, logger);
 const clock = new SystemClock();
+const reportsRepository = new SequelizeReportsRepository(sequelize);
 export const dependencies = {
   logger,
   tokens,
@@ -37,7 +46,7 @@ export const dependencies = {
   manageAdmins: new ManageAdmins(repositories.adminRepository, hasher),
   manageMovementTypes: new ManageMovementTypes(repositories.movementTypeRepository),
   createClient: new CreateClient(repositories.clientRepository, repositories.clientGroupRepository),
-  manageClients: new ManageClients(repositories.clientRepository, repositories.clientGroupRepository),
+  manageClients: new ManageClients(repositories.clientRepository, repositories.clientGroupRepository, reportsRepository),
   manageClientGroups: new ManageClientGroups(repositories.clientGroupRepository),
   manageCurrencies: new ManageCurrencies(repositories.currencyRepository),
   createTransfer: new CreateTransfer(uow, clock),
@@ -51,8 +60,15 @@ export const dependencies = {
     repositories.currencyRepository,
   ),
   getMovementDetails: new GetMovementDetails(repositories.movementRepository),
+  listMovements: new ListMovements(repositories.movementRepository),
+  getClientBalances: new GetClientBalances(reportsRepository, repositories.clientRepository),
+  getBalanceSheet: new GetBalanceSheet(reportsRepository),
+  getDashboard: new GetDashboard(reportsRepository, repositories.movementRepository, clock),
   cancelMovement: new CancelMovement(uow),
   reverseMovement: new ReverseMovement(uow, clock),
   getNotifications: new GetNotifications(repositories.notificationRepository),
   markNotificationRead: new MarkNotificationRead(repositories.notificationRepository),
+  notifyAdmins: new NotifyAdmins(repositories.adminRepository, repositories.notificationRepository, logger),
+  resetSystemData: new ResetSystemData(uow, repositories.adminRepository, hasher),
+  deleteOwnAccount: new DeleteOwnAccount(repositories.adminRepository, hasher),
 };

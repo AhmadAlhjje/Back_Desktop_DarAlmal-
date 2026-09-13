@@ -17,8 +17,18 @@ import { receiptPaymentSchema } from './validators/receiptPaymentSchemas.js';
 import { exchangeSchema } from './validators/exchangeSchemas.js';
 import type { GetJournal } from '../../application/use-cases/journal/GetJournal.js';
 import type { GetClientStatement } from '../../application/use-cases/journal/GetClientStatement.js';
-import { journalQuerySchema, statementQuerySchema } from './validators/querySchemas.js';
+import {
+  balanceSheetQuerySchema,
+  balancesQuerySchema,
+  journalQuerySchema,
+  movementsQuerySchema,
+  statementQuerySchema,
+} from './validators/querySchemas.js';
 import type { GetMovementDetails } from '../../application/use-cases/movements/GetMovementDetails.js';
+import type { ListMovements } from '../../application/use-cases/movements/ListMovements.js';
+import type { GetClientBalances } from '../../application/use-cases/reports/GetClientBalances.js';
+import type { GetBalanceSheet } from '../../application/use-cases/reports/GetBalanceSheet.js';
+import type { GetDashboard } from '../../application/use-cases/reports/GetDashboard.js';
 import type { CancelMovement } from '../../application/use-cases/movements/CancelMovement.js';
 import type { ReverseMovement } from '../../application/use-cases/movements/ReverseMovement.js';
 import type { GetNotifications } from '../../application/use-cases/notifications/GetNotifications.js';
@@ -40,6 +50,29 @@ import { createAdminSchema, updateAdminSchema } from './validators/adminSchemas.
 import { updateMovementTypeSchema } from './validators/movementTypeSchemas.js';
 import { uploadCurrencyIcon } from './middleware/currencyIconUpload.js';
 import { ApplicationError } from '../../application/errors/ApplicationError.js';
+import type { NotifyAdmins, NotificationEvent } from '../../application/use-cases/notifications/NotifyAdmins.js';
+import type { ResetSystemData } from '../../application/use-cases/system/ResetSystemData.js';
+import type { DeleteOwnAccount } from '../../application/use-cases/admins/DeleteOwnAccount.js';
+import { archiveClientSchema, secretClientSchema } from './validators/clientSchemas.js';
+import { clientsQuerySchema } from './validators/querySchemas.js';
+import { deleteOwnAccountSchema, resetDataSchema } from './validators/systemSchemas.js';
+import type { Movement } from '../../domain/entities/Movement.js';
+
+/** نصوص الإشعارات العربية (قرار د9): عنوان + وصف مختصر لكل عملية. */
+const MOVEMENT_LABELS: Record<string, string> = {
+  TRANSFER: 'حوالة',
+  SETTLEMENT: 'تسوية',
+  MULTI: 'حركة متعددة',
+  RECEIPT: 'سند قبض',
+  PAYMENT: 'سند دفع',
+  EXCHANGE: 'تصريف',
+};
+const movementCreated = (kind: string, m: Movement, description?: string | null): NotificationEvent => ({
+  type: 'MOVEMENT',
+  movementId: m.id,
+  title: `${MOVEMENT_LABELS[kind] ?? kind} جديدة #${m.movementNo}`,
+  message: `تم إنشاء ${MOVEMENT_LABELS[kind] ?? kind} رقم ${m.movementNo}${description ? ` — ${description}` : ''}. المحصلة: ${m.totalResult} $`,
+});
 const asyncRoute =
   (handler: RequestHandler): RequestHandler =>
   (req, res, next) =>
@@ -59,13 +92,21 @@ export function createRoutes(deps: {
   getJournal: GetJournal;
   getClientStatement: GetClientStatement;
   getMovementDetails: GetMovementDetails;
+  listMovements: ListMovements;
+  getClientBalances: GetClientBalances;
+  getBalanceSheet: GetBalanceSheet;
+  getDashboard: GetDashboard;
   cancelMovement: CancelMovement;
   reverseMovement: ReverseMovement;
   getNotifications: GetNotifications;
   markNotificationRead: MarkNotificationRead;
+  notifyAdmins: NotifyAdmins;
+  resetSystemData: ResetSystemData;
+  deleteOwnAccount: DeleteOwnAccount;
   tokens: TokenService;
 }) {
   const router = Router();
+  const notify = (event: NotificationEvent) => void deps.notifyAdmins.execute(event);
   router.post(
     '/auth/login',
     validate(loginSchema),
@@ -89,7 +130,9 @@ export function createRoutes(deps: {
     authorize('admin.manage'),
     validate(createAdminSchema),
     asyncRoute(async (req, res) => {
-      res.status(201).json({ success: true, data: await deps.manageAdmins.create(req.body) });
+      const admin = await deps.manageAdmins.create(req.body);
+      notify({ type: 'ADMIN', title: 'إداري جديد', message: `تمت إضافة الإداري «${admin.fullName}» بدور ${admin.role}.` });
+      res.status(201).json({ success: true, data: admin });
     }),
   );
   router.patch(
@@ -98,7 +141,9 @@ export function createRoutes(deps: {
     authorize('admin.manage'),
     validate(updateAdminSchema),
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.manageAdmins.update(req.params.id, req.body) });
+      const admin = await deps.manageAdmins.update(req.params.id, req.body);
+      notify({ type: 'ADMIN', title: 'تحديث إداري', message: `تم تحديث بيانات الإداري «${admin.fullName}».` });
+      res.json({ success: true, data: admin });
     }),
   );
   router.patch(
@@ -106,7 +151,9 @@ export function createRoutes(deps: {
     authenticate(deps.tokens),
     authorize('admin.manage'),
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.manageAdmins.deactivate(req.params.id, req.auth!.adminId) });
+      const admin = await deps.manageAdmins.deactivate(req.params.id, req.auth!.adminId);
+      notify({ type: 'ADMIN', title: 'تعطيل إداري', message: `تم تعطيل حساب الإداري «${admin.fullName}».` });
+      res.json({ success: true, data: admin });
     }),
   );
   router.get(
@@ -134,17 +181,37 @@ export function createRoutes(deps: {
     authorize('client.create'),
     validate(createClientSchema),
     asyncRoute(async (req, res) => {
-      res.status(201).json({ success: true, data: await deps.createClient.execute(req.body) });
+      const client = await deps.createClient.execute(req.body);
+      notify({
+        type: 'CLIENT',
+        title: client.accountType === 'BOX' ? `صندوق جديد: ${client.fullName}` : `عميل جديد: ${client.fullName}`,
+        message: `تم تسجيل الحساب «${client.fullName}» (${client.code}).`,
+      });
+      res.status(201).json({ success: true, data: client });
     }),
   );
   router.get(
     '/clients',
     authenticate(deps.tokens),
     authorize('movement.view'),
-    validateQuery(paginationQuerySchema),
+    validateQuery(clientsQuerySchema),
     asyncRoute(async (req, res) => {
       const q = req.validatedQuery;
-      res.json({ success: true, data: await deps.manageClients.list(q.page, q.limit) });
+      res.json({
+        success: true,
+        data: await deps.manageClients.list(q.page, q.limit, {
+          archived: q.archived === 'true',
+          includeSecret: req.auth!.role === 'ADMIN',
+        }),
+      });
+    }),
+  );
+  router.get(
+    '/clients/cash-box',
+    authenticate(deps.tokens),
+    authorize('movement.view'),
+    asyncRoute(async (_req, res) => {
+      res.json({ success: true, data: await deps.manageClients.cashBox() });
     }),
   );
   router.patch(
@@ -153,7 +220,72 @@ export function createRoutes(deps: {
     authorize('client.update'),
     validate(updateClientSchema),
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.manageClients.update(req.params.id, req.body) });
+      const client = await deps.manageClients.update(req.params.id, req.body);
+      notify({ type: 'CLIENT', title: `تحديث حساب: ${client.fullName}`, message: `تم تحديث بيانات الحساب «${client.fullName}».` });
+      res.json({ success: true, data: client });
+    }),
+  );
+  router.patch(
+    '/clients/:id/archive',
+    authenticate(deps.tokens),
+    authorize('client.update'),
+    validate(archiveClientSchema),
+    asyncRoute(async (req, res) => {
+      const archived = req.body.archived !== false;
+      const client = await deps.manageClients.archive(req.params.id, archived);
+      notify({
+        type: 'CLIENT',
+        title: archived ? `أرشفة حساب: ${client.fullName}` : `إلغاء أرشفة حساب: ${client.fullName}`,
+        message: archived
+          ? `تمت أرشفة الحساب «${client.fullName}» بعد تصفير أرصدته.`
+          : `أُعيد الحساب «${client.fullName}» من الأرشيف.`,
+      });
+      res.json({ success: true, data: client });
+    }),
+  );
+  router.patch(
+    '/clients/:id/set-cash-box',
+    authenticate(deps.tokens),
+    authorize('client.update'),
+    asyncRoute(async (req, res) => {
+      const client = await deps.manageClients.setCashBox(req.params.id);
+      notify({
+        type: 'CLIENT',
+        title: 'تعيين حساب الصندوق',
+        message: `أصبح «${client.fullName}» هو حساب الصندوق لسندات القبض والدفع.`,
+      });
+      res.json({ success: true, data: client });
+    }),
+  );
+  router.patch(
+    '/clients/:id/set-secret',
+    authenticate(deps.tokens),
+    authorize('client.update'),
+    validate(secretClientSchema),
+    asyncRoute(async (req, res) => {
+      res.json({ success: true, data: await deps.manageClients.setSecret(req.params.id, req.body.isSecret) });
+    }),
+  );
+  router.patch(
+    '/clients/:id/rollover',
+    authenticate(deps.tokens),
+    authorize('client.update'),
+    asyncRoute(async (req, res) => {
+      const client = await deps.manageClients.rollover(req.params.id);
+      notify({
+        type: 'CLIENT',
+        title: `تدوير أرصدة: ${client.fullName}`,
+        message: `تم تدوير أرصدة الحساب «${client.fullName}»؛ تبدأ كشوف الحساب الجديدة من هذه اللحظة.`,
+      });
+      res.json({ success: true, data: client });
+    }),
+  );
+  router.delete(
+    '/clients/:id',
+    authenticate(deps.tokens),
+    authorize('client.update'),
+    asyncRoute(async (req, res) => {
+      res.json({ success: true, data: await deps.manageClients.delete(req.params.id) });
     }),
   );
   router.get(
@@ -182,6 +314,14 @@ export function createRoutes(deps: {
     validate(updateClientGroupSchema),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.manageClientGroups.update(req.params.id, req.body) });
+    }),
+  );
+  router.delete(
+    '/client-groups/:id',
+    authenticate(deps.tokens),
+    authorize('client.update'),
+    asyncRoute(async (req, res) => {
+      res.json({ success: true, data: await deps.manageClientGroups.delete(req.params.id) });
     }),
   );
   router.get(
@@ -237,10 +377,9 @@ export function createRoutes(deps: {
     authorize('movement.create'),
     validate(createTransferSchema),
     asyncRoute(async (req, res) => {
-      res.status(201).json({
-        success: true,
-        data: await deps.createTransfer.execute({ ...req.body, createdBy: req.auth!.adminId }),
-      });
+      const result = await deps.createTransfer.execute({ ...req.body, createdBy: req.auth!.adminId });
+      notify(movementCreated('TRANSFER', result.movement, req.body.statement));
+      res.status(201).json({ success: true, data: result });
     }),
   );
   router.post(
@@ -251,11 +390,15 @@ export function createRoutes(deps: {
     asyncRoute(async (req, res) => {
       res.status(201).json({
         success: true,
-        data: await deps.createJournalMovement.execute({
-          ...req.body,
-          movementCode: 'SETTLEMENT',
-          createdBy: req.auth!.adminId,
-        }),
+        data: await (async () => {
+          const result = await deps.createJournalMovement.execute({
+            ...req.body,
+            movementCode: 'SETTLEMENT',
+            createdBy: req.auth!.adminId,
+          });
+          notify(movementCreated('SETTLEMENT', result, req.body.description));
+          return result;
+        })(),
       });
     }),
   );
@@ -267,11 +410,15 @@ export function createRoutes(deps: {
     asyncRoute(async (req, res) => {
       res.status(201).json({
         success: true,
-        data: await deps.createJournalMovement.execute({
-          ...req.body,
-          movementCode: 'MULTI',
-          createdBy: req.auth!.adminId,
-        }),
+        data: await (async () => {
+          const result = await deps.createJournalMovement.execute({
+            ...req.body,
+            movementCode: 'MULTI',
+            createdBy: req.auth!.adminId,
+          });
+          notify(movementCreated('MULTI', result, req.body.description));
+          return result;
+        })(),
       });
     }),
   );
@@ -283,11 +430,15 @@ export function createRoutes(deps: {
     asyncRoute(async (req, res) => {
       res.status(201).json({
         success: true,
-        data: await deps.createReceiptPayment.execute({
-          ...req.body,
-          type: ReceiptPaymentType.RECEIPT,
-          createdBy: req.auth!.adminId,
-        }),
+        data: await (async () => {
+          const result = await deps.createReceiptPayment.execute({
+            ...req.body,
+            type: ReceiptPaymentType.RECEIPT,
+            createdBy: req.auth!.adminId,
+          });
+          notify(movementCreated('RECEIPT', result.movement, req.body.statement));
+          return result;
+        })(),
       });
     }),
   );
@@ -299,11 +450,15 @@ export function createRoutes(deps: {
     asyncRoute(async (req, res) => {
       res.status(201).json({
         success: true,
-        data: await deps.createReceiptPayment.execute({
-          ...req.body,
-          type: ReceiptPaymentType.PAYMENT,
-          createdBy: req.auth!.adminId,
-        }),
+        data: await (async () => {
+          const result = await deps.createReceiptPayment.execute({
+            ...req.body,
+            type: ReceiptPaymentType.PAYMENT,
+            createdBy: req.auth!.adminId,
+          });
+          notify(movementCreated('PAYMENT', result.movement, req.body.statement));
+          return result;
+        })(),
       });
     }),
   );
@@ -315,7 +470,11 @@ export function createRoutes(deps: {
     asyncRoute(async (req, res) => {
       res.status(201).json({
         success: true,
-        data: await deps.createExchange.execute({ ...req.body, createdBy: req.auth!.adminId }),
+        data: await (async () => {
+          const result = await deps.createExchange.execute({ ...req.body, createdBy: req.auth!.adminId });
+          notify(movementCreated('EXCHANGE', result.movement, req.body.statement));
+          return result;
+        })(),
       });
     }),
   );
@@ -365,6 +524,67 @@ export function createRoutes(deps: {
     }),
   );
   router.get(
+    '/movements',
+    authenticate(deps.tokens),
+    authorize('movement.view'),
+    validateQuery(movementsQuerySchema),
+    asyncRoute(async (req, res) => {
+      const q = req.validatedQuery;
+      res.json({
+        success: true,
+        data: await deps.listMovements.execute({
+          dateFrom: q.date_from,
+          dateTo: q.date_to,
+          movementTypeId: q.movement_type_id,
+          clientId: q.client_id,
+          status: q.status,
+          movementNo: q.movement_no,
+          createdBy: q.created_by,
+          q: q.q,
+          page: q.page,
+          limit: q.limit,
+        }),
+      });
+    }),
+  );
+  router.get(
+    '/clients/:id/balances',
+    authenticate(deps.tokens),
+    authorize('journal.view'),
+    validateQuery(balancesQuerySchema),
+    asyncRoute(async (req, res) => {
+      res.json({ success: true, data: await deps.getClientBalances.execute(req.params.id, req.validatedQuery.as_of) });
+    }),
+  );
+  router.get(
+    '/reports/balance-sheet',
+    authenticate(deps.tokens),
+    authorize('journal.view'),
+    validateQuery(balanceSheetQuerySchema),
+    asyncRoute(async (req, res) => {
+      const q = req.validatedQuery;
+      res.json({
+        success: true,
+        data: await deps.getBalanceSheet.execute({
+          asOf: q.as_of,
+          currencyId: q.currency_id,
+          mode: q.mode,
+          detail: q.detail,
+          clientQuery: q.q,
+          includeSecret: req.auth!.role === 'ADMIN',
+        }),
+      });
+    }),
+  );
+  router.get(
+    '/dashboard',
+    authenticate(deps.tokens),
+    authorize('journal.view'),
+    asyncRoute(async (_req, res) => {
+      res.json({ success: true, data: await deps.getDashboard.execute() });
+    }),
+  );
+  router.get(
     '/movements/:id',
     authenticate(deps.tokens),
     authorize('movement.view'),
@@ -377,7 +597,14 @@ export function createRoutes(deps: {
     authenticate(deps.tokens),
     authorize('movement.cancel'),
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.cancelMovement.execute(req.params.id, req.auth!.adminId) });
+      const movement = await deps.cancelMovement.execute(req.params.id, req.auth!.adminId);
+      notify({
+        type: 'ALERT',
+        movementId: movement.id,
+        title: `إلغاء حركة #${movement.movementNo}`,
+        message: `تم إلغاء الحركة رقم ${movement.movementNo}.`,
+      });
+      res.json({ success: true, data: movement });
     }),
   );
   router.post(
@@ -385,9 +612,14 @@ export function createRoutes(deps: {
     authenticate(deps.tokens),
     authorize('movement.reverse'),
     asyncRoute(async (req, res) => {
-      res
-        .status(201)
-        .json({ success: true, data: await deps.reverseMovement.execute(req.params.id, req.auth!.adminId) });
+      const result = await deps.reverseMovement.execute(req.params.id, req.auth!.adminId);
+      notify({
+        type: 'ALERT',
+        movementId: result.reverseMovement.id,
+        title: `عكس حركة #${result.reverseMovement.movementNo}`,
+        message: `تم إنشاء حركة عكسية رقم ${result.reverseMovement.movementNo} للحركة الأصلية.`,
+      });
+      res.status(201).json({ success: true, data: result });
     }),
   );
   router.get(
@@ -399,11 +631,48 @@ export function createRoutes(deps: {
       res.json({ success: true, data: await deps.getNotifications.execute(req.auth!.adminId, q.page, q.limit) });
     }),
   );
+  router.get(
+    '/notifications/unread-count',
+    authenticate(deps.tokens),
+    asyncRoute(async (req, res) => {
+      res.json({ success: true, data: await deps.getNotifications.unreadCount(req.auth!.adminId) });
+    }),
+  );
+  router.patch(
+    '/notifications/read-all',
+    authenticate(deps.tokens),
+    asyncRoute(async (req, res) => {
+      res.json({ success: true, data: await deps.getNotifications.markAllRead(req.auth!.adminId) });
+    }),
+  );
   router.patch(
     '/notifications/:id/read',
     authenticate(deps.tokens),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.markNotificationRead.execute(req.params.id, req.auth!.adminId) });
+    }),
+  );
+  router.post(
+    '/system/reset-data',
+    authenticate(deps.tokens),
+    authorize('admin.manage'),
+    validate(resetDataSchema),
+    asyncRoute(async (req, res) => {
+      const summary = await deps.resetSystemData.execute(req.auth!.adminId, req.body.password, req.body.confirmation);
+      notify({
+        type: 'SYSTEM',
+        title: 'تصفير البيانات',
+        message: 'تم تصفير كل البيانات التجارية (الحركات، القيود، العملاء، المجموعات).',
+      });
+      res.json({ success: true, data: summary });
+    }),
+  );
+  router.delete(
+    '/auth/me',
+    authenticate(deps.tokens),
+    validate(deleteOwnAccountSchema),
+    asyncRoute(async (req, res) => {
+      res.json({ success: true, data: await deps.deleteOwnAccount.execute(req.auth!.adminId, req.body.password) });
     }),
   );
   return router;

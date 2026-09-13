@@ -8,8 +8,11 @@ export const createClientSchema = z
     email: z.string().email().max(150).nullable().default(null),
     address: z.string().nullable().default(null),
     importance: z.number().int().min(0).max(100000).default(0),
+    accountType: z.enum(['CLIENT', 'BOX']).default('CLIENT'),
   })
   .strict();
+export const archiveClientSchema = z.object({ archived: z.boolean().default(true) }).strict();
+export const secretClientSchema = z.object({ isSecret: z.boolean() }).strict();
 export const updateClientSchema = createClientSchema
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'At least one field is required');
