@@ -6,6 +6,8 @@ export interface NotificationEvent {
   message: string;
   type: 'MOVEMENT' | 'CLIENT' | 'CURRENCY' | 'ADMIN' | 'SYSTEM' | 'ALERT';
   movementId?: string | null;
+  /** الإداري الذي نفّذ العملية (يُحفظ اسمه مع الإشعار). */
+  actorId?: string | null;
 }
 
 /**
@@ -21,6 +23,7 @@ export class NotifyAdmins {
   async execute(event: NotificationEvent): Promise<number> {
     try {
       const recipients = await this.admins.findAllActive();
+      const actor = event.actorId ? await this.admins.findById(event.actorId) : null;
       await Promise.all(
         recipients.map((admin) =>
           this.notifications.create({
@@ -30,6 +33,8 @@ export class NotifyAdmins {
             type: event.type,
             movementId: event.movementId ?? null,
             isRead: false,
+            actorId: event.actorId ?? null,
+            actorName: actor?.fullName ?? null,
           }),
         ),
       );

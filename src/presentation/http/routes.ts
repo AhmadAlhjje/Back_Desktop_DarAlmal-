@@ -67,11 +67,13 @@ const MOVEMENT_LABELS: Record<string, string> = {
   PAYMENT: 'سند دفع',
   EXCHANGE: 'تصريف',
 };
+/** عرض المبلغ بلا أصفار زائدة (5.0000 → 5، 12.50 → 12.5). */
+const trimAmount = (value: string): string => (value.includes('.') ? value.replace(/\.?0+$/, '') : value) || '0';
 const movementCreated = (kind: string, m: Movement, description?: string | null): NotificationEvent => ({
   type: 'MOVEMENT',
   movementId: m.id,
   title: `${MOVEMENT_LABELS[kind] ?? kind} جديدة #${m.movementNo}`,
-  message: `تم إنشاء ${MOVEMENT_LABELS[kind] ?? kind} رقم ${m.movementNo}${description ? ` — ${description}` : ''}. المحصلة: ${m.totalResult} $`,
+  message: `تم إنشاء ${MOVEMENT_LABELS[kind] ?? kind} رقم ${m.movementNo}${description ? ` — ${description}` : ''}. المحصلة: ${trimAmount(m.totalResult)} $`,
 });
 const asyncRoute =
   (handler: RequestHandler): RequestHandler =>
@@ -106,7 +108,8 @@ export function createRoutes(deps: {
   tokens: TokenService;
 }) {
   const router = Router();
-  const notify = (event: NotificationEvent) => void deps.notifyAdmins.execute(event);
+  const notifyAs = (actorId: string | undefined, event: NotificationEvent) =>
+    void deps.notifyAdmins.execute({ ...event, actorId: actorId ?? null });
   router.post(
     '/auth/login',
     validate(loginSchema),
@@ -131,7 +134,7 @@ export function createRoutes(deps: {
     validate(createAdminSchema),
     asyncRoute(async (req, res) => {
       const admin = await deps.manageAdmins.create(req.body);
-      notify({ type: 'ADMIN', title: 'إداري جديد', message: `تمت إضافة الإداري «${admin.fullName}» بدور ${admin.role}.` });
+      notifyAs(req.auth?.adminId, { type: 'ADMIN', title: 'إداري جديد', message: `تمت إضافة الإداري «${admin.fullName}» بدور ${admin.role}.` });
       res.status(201).json({ success: true, data: admin });
     }),
   );
@@ -142,7 +145,17 @@ export function createRoutes(deps: {
     validate(updateAdminSchema),
     asyncRoute(async (req, res) => {
       const admin = await deps.manageAdmins.update(req.params.id, req.body);
-      notify({ type: 'ADMIN', title: 'تحديث إداري', message: `تم تحديث بيانات الإداري «${admin.fullName}».` });
+      notifyAs(req.auth?.adminId, { type: 'ADMIN', title: 'تحديث إداري', message: `تم تحديث بيانات الإداري «${admin.fullName}».` });
+      res.json({ success: true, data: admin });
+    }),
+  );
+  router.patch(
+    '/admins/:id/activate',
+    authenticate(deps.tokens),
+    authorize('admin.manage'),
+    asyncRoute(async (req, res) => {
+      const admin = await deps.manageAdmins.activate(req.params.id);
+      notifyAs(req.auth?.adminId, { type: 'ADMIN', title: 'إعادة تفعيل إداري', message: `أُعيد تفعيل حساب الإداري «${admin.fullName}».` });
       res.json({ success: true, data: admin });
     }),
   );
@@ -152,7 +165,7 @@ export function createRoutes(deps: {
     authorize('admin.manage'),
     asyncRoute(async (req, res) => {
       const admin = await deps.manageAdmins.deactivate(req.params.id, req.auth!.adminId);
-      notify({ type: 'ADMIN', title: 'تعطيل إداري', message: `تم تعطيل حساب الإداري «${admin.fullName}».` });
+      notifyAs(req.auth?.adminId, { type: 'ADMIN', title: 'تعطيل إداري', message: `تم تعطيل حساب الإداري «${admin.fullName}».` });
       res.json({ success: true, data: admin });
     }),
   );
@@ -182,7 +195,7 @@ export function createRoutes(deps: {
     validate(createClientSchema),
     asyncRoute(async (req, res) => {
       const client = await deps.createClient.execute(req.body);
-      notify({
+      notifyAs(req.auth?.adminId, {
         type: 'CLIENT',
         title: client.accountType === 'BOX' ? `صندوق جديد: ${client.fullName}` : `عميل جديد: ${client.fullName}`,
         message: `تم تسجيل الحساب «${client.fullName}» (${client.code}).`,
@@ -221,7 +234,7 @@ export function createRoutes(deps: {
     validate(updateClientSchema),
     asyncRoute(async (req, res) => {
       const client = await deps.manageClients.update(req.params.id, req.body);
-      notify({ type: 'CLIENT', title: `تحديث حساب: ${client.fullName}`, message: `تم تحديث بيانات الحساب «${client.fullName}».` });
+      notifyAs(req.auth?.adminId, { type: 'CLIENT', title: `تحديث حساب: ${client.fullName}`, message: `تم تحديث بيانات الحساب «${client.fullName}».` });
       res.json({ success: true, data: client });
     }),
   );
@@ -233,7 +246,7 @@ export function createRoutes(deps: {
     asyncRoute(async (req, res) => {
       const archived = req.body.archived !== false;
       const client = await deps.manageClients.archive(req.params.id, archived);
-      notify({
+      notifyAs(req.auth?.adminId, {
         type: 'CLIENT',
         title: archived ? `أرشفة حساب: ${client.fullName}` : `إلغاء أرشفة حساب: ${client.fullName}`,
         message: archived
@@ -249,7 +262,7 @@ export function createRoutes(deps: {
     authorize('client.update'),
     asyncRoute(async (req, res) => {
       const client = await deps.manageClients.setCashBox(req.params.id);
-      notify({
+      notifyAs(req.auth?.adminId, {
         type: 'CLIENT',
         title: 'تعيين حساب الصندوق',
         message: `أصبح «${client.fullName}» هو حساب الصندوق لسندات القبض والدفع.`,
@@ -272,7 +285,7 @@ export function createRoutes(deps: {
     authorize('client.update'),
     asyncRoute(async (req, res) => {
       const client = await deps.manageClients.rollover(req.params.id);
-      notify({
+      notifyAs(req.auth?.adminId, {
         type: 'CLIENT',
         title: `تدوير أرصدة: ${client.fullName}`,
         message: `تم تدوير أرصدة الحساب «${client.fullName}»؛ تبدأ كشوف الحساب الجديدة من هذه اللحظة.`,
@@ -361,6 +374,16 @@ export function createRoutes(deps: {
     }),
   );
   router.patch(
+    '/currencies/:id/activate',
+    authenticate(deps.tokens),
+    authorize('currency.manage'),
+    asyncRoute(async (req, res) => {
+      const currency = await deps.manageCurrencies.activate(req.params.id);
+      notifyAs(req.auth?.adminId, { type: 'CURRENCY', title: `إعادة تفعيل عملة: ${currency.name}`, message: `أُعيد تفعيل العملة «${currency.name}» (${currency.code}).` });
+      res.json({ success: true, data: currency });
+    }),
+  );
+  router.patch(
     '/currencies/:id/icon',
     authenticate(deps.tokens),
     authorize('currency.manage'),
@@ -378,7 +401,7 @@ export function createRoutes(deps: {
     validate(createTransferSchema),
     asyncRoute(async (req, res) => {
       const result = await deps.createTransfer.execute({ ...req.body, createdBy: req.auth!.adminId });
-      notify(movementCreated('TRANSFER', result.movement, req.body.statement));
+      notifyAs(req.auth?.adminId, movementCreated('TRANSFER', result.movement, req.body.statement));
       res.status(201).json({ success: true, data: result });
     }),
   );
@@ -396,7 +419,7 @@ export function createRoutes(deps: {
             movementCode: 'SETTLEMENT',
             createdBy: req.auth!.adminId,
           });
-          notify(movementCreated('SETTLEMENT', result, req.body.description));
+          notifyAs(req.auth?.adminId, movementCreated('SETTLEMENT', result, req.body.description));
           return result;
         })(),
       });
@@ -416,7 +439,7 @@ export function createRoutes(deps: {
             movementCode: 'MULTI',
             createdBy: req.auth!.adminId,
           });
-          notify(movementCreated('MULTI', result, req.body.description));
+          notifyAs(req.auth?.adminId, movementCreated('MULTI', result, req.body.description));
           return result;
         })(),
       });
@@ -436,7 +459,7 @@ export function createRoutes(deps: {
             type: ReceiptPaymentType.RECEIPT,
             createdBy: req.auth!.adminId,
           });
-          notify(movementCreated('RECEIPT', result.movement, req.body.statement));
+          notifyAs(req.auth?.adminId, movementCreated('RECEIPT', result.movement, req.body.statement));
           return result;
         })(),
       });
@@ -456,7 +479,7 @@ export function createRoutes(deps: {
             type: ReceiptPaymentType.PAYMENT,
             createdBy: req.auth!.adminId,
           });
-          notify(movementCreated('PAYMENT', result.movement, req.body.statement));
+          notifyAs(req.auth?.adminId, movementCreated('PAYMENT', result.movement, req.body.statement));
           return result;
         })(),
       });
@@ -472,7 +495,7 @@ export function createRoutes(deps: {
         success: true,
         data: await (async () => {
           const result = await deps.createExchange.execute({ ...req.body, createdBy: req.auth!.adminId });
-          notify(movementCreated('EXCHANGE', result.movement, req.body.statement));
+          notifyAs(req.auth?.adminId, movementCreated('EXCHANGE', result.movement, req.body.statement));
           return result;
         })(),
       });
@@ -537,6 +560,7 @@ export function createRoutes(deps: {
           dateTo: q.date_to,
           movementTypeId: q.movement_type_id,
           clientId: q.client_id,
+          currencyId: q.currency_id,
           status: q.status,
           movementNo: q.movement_no,
           createdBy: q.created_by,
@@ -598,7 +622,7 @@ export function createRoutes(deps: {
     authorize('movement.cancel'),
     asyncRoute(async (req, res) => {
       const movement = await deps.cancelMovement.execute(req.params.id, req.auth!.adminId);
-      notify({
+      notifyAs(req.auth?.adminId, {
         type: 'ALERT',
         movementId: movement.id,
         title: `إلغاء حركة #${movement.movementNo}`,
@@ -613,7 +637,7 @@ export function createRoutes(deps: {
     authorize('movement.reverse'),
     asyncRoute(async (req, res) => {
       const result = await deps.reverseMovement.execute(req.params.id, req.auth!.adminId);
-      notify({
+      notifyAs(req.auth?.adminId, {
         type: 'ALERT',
         movementId: result.reverseMovement.id,
         title: `عكس حركة #${result.reverseMovement.movementNo}`,
@@ -659,7 +683,7 @@ export function createRoutes(deps: {
     validate(resetDataSchema),
     asyncRoute(async (req, res) => {
       const summary = await deps.resetSystemData.execute(req.auth!.adminId, req.body.password, req.body.confirmation);
-      notify({
+      notifyAs(req.auth?.adminId, {
         type: 'SYSTEM',
         title: 'تصفير البيانات',
         message: 'تم تصفير كل البيانات التجارية (الحركات، القيود، العملاء، المجموعات).',

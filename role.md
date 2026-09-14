@@ -99,6 +99,16 @@
 - `DELETE /auth/me {password}`: يعطّل حساب الإداري الحالي (لا يحذف الصف) ويمنع تعطيل آخر ADMIN نشط (`LAST_ADMIN`).
 - كشف الحساب وقيود اليومية تعيد `createdById/createdByName` للعرض.
 
+## الترتيب والإشعارات وإعادة التفعيل — معتمد 2026-09-14
+
+- **الأحدث أولاً** في كل القوائم: الإداريون/المجموعات/العملاء/العملات `id DESC`، الحركات `created_at DESC, id_movement DESC`، قيود اليومية وكشف الحساب `created_at DESC, id_day DESC`، الإشعارات `created_at DESC`. الرصيد الجاري في كشف الحساب (`GetClientStatement`) يُحسب تنازلياً: يبدأ من رصيد نهاية الفترة ويطرح أثر كل قيد نزولاً حتى الرصيد الافتتاحي.
+- **معرّف الحركة/رقمها** (`newMovementId` في `use-cases/movements/helpers.ts`): 63 بت مرتّب زمنياً = 41 بت ميلي ثانية + 22 بت عشوائي. يضمن أن الترتيب `id DESC` يطابق ترتيب الإنشاء حتى داخل الثانية نفسها (عكس ثم إنشاء عند «تعديل الحركة» في الواجهة) ويبقى غير قابل للتخمين. المعرّفات القديمة العشوائية لا تتأثر.
+- **الإشعارات** تحمل المنفّذ: `notifications.actor_id` و`actor_name` (migration `20260914000100-notification-actor`)؛ كل مسار تعديل يستدعي `notifyAs(req.auth.adminId, event)`. نص الإشعار يعرض المبالغ بلا أصفار عشرية زائدة (`trimAmount`).
+- **إعادة التفعيل**: `PATCH /admins/:id/activate` (`admin.manage`) و`PATCH /currencies/:id/activate` (`currency.manage`) بجانب `deactivate`؛ إلغاء أرشفة العميل عبر `PATCH /clients/:id/archive {archived:false}`.
+- `GET /movements` يقبل `currency_id` (فلتر بوجود قيد بتلك العملة) إضافةً إلى `client_id`؛ الواجهة تبني «دفتر اليومية» بصف واحد لكل حركة من هذه النقطة مع ملخص `GET /journal`.
+- `GET /reports/balance-sheet` يمرّر `includeSecret` لدور ADMIN فقط.
+- «تعديل الحركة» غير موجود كنقطة في الباك اند بقرار: التعديل = `POST /movements/:id/reverse` ثم إنشاء حركة جديدة من الواجهة؛ الحركات المرحّلة لا تُعدَّل في مكانها.
+
 ## الأمان وجودة الكود
 
 - كلمات المرور تخزن bcrypt hashes فقط، ولا يعاد أو يسجل `password_hash` أو password أو JWT.

@@ -154,6 +154,9 @@ export interface Notification {
   type: string | null;
   movementId: string | null;
   isRead: boolean;
+  /** منفّذ العملية (اسمه محفوظ مع الإشعار حتى لو عُطّل لاحقاً). */
+  actorId?: string | null;
+  actorName?: string | null;
   /** ISO timestamp (للقراءة فقط). */
   createdAt?: string;
 }

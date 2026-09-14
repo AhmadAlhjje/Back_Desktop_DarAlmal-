@@ -35,6 +35,7 @@ export const movementsQuerySchema = z
     date_to: date.optional(),
     movement_type_id: id.optional(),
     client_id: id.optional(),
+    currency_id: id.optional(),
     status: z.enum(['DRAFT', 'POSTED', 'CANCELLED', 'REVERSED']).optional(),
     movement_no: id.optional(),
     created_by: id.optional(),

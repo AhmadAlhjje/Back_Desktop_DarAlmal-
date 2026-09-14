@@ -85,6 +85,12 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           `EXISTS (SELECT 1 FROM journal_entries je WHERE je.movement_id = \`${alias}\`.\`id_movement\` AND je.client_id = ${sequelizeEscape(f.clientId)})`,
         ),
       );
+    if (f.currencyId)
+      and.push(
+        literal(
+          `EXISTS (SELECT 1 FROM journal_entries jec WHERE jec.movement_id = \`${alias}\`.\`id_movement\` AND jec.currency_id = ${sequelizeEscape(f.currencyId)})`,
+        ),
+      );
     if (f.q && f.q.trim()) {
       const like = esc(f.q.trim());
       const noMatch = /^\d+$/.test(f.q.trim()) ? ` OR \`${alias}\`.\`movement_no\` = ${sequelizeEscape(f.q.trim())}` : '';
@@ -160,10 +166,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       },
       async findPage(page, limit) {
         const r = await AdminModel.findAndCountAll({
-          order: [
-            ['full_name', 'ASC'],
-            ['id_admin', 'ASC'],
-          ],
+          order: [['id_admin', 'DESC']],
           offset: (page - 1) * limit,
           limit,
           ...options,
@@ -218,7 +221,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
               ],
             ],
           },
-          order: [['group_name', 'ASC']],
+          order: [['id_group', 'DESC']],
           offset: (page - 1) * limit,
           limit,
           ...options,
@@ -278,11 +281,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             ],
           },
           include: [{ model: ClientGroupModel, as: 'group', attributes: ['group_name'], required: false }],
-          order: [
-            ['importance', 'DESC'],
-            ['full_name', 'ASC'],
-            ['id_client', 'ASC'],
-          ],
+          order: [['id_client', 'DESC']],
           offset: (page - 1) * limit,
           limit,
           distinct: true,
@@ -380,7 +379,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       },
       async findPage(page, limit) {
         const r = await CurrencyModel.findAndCountAll({
-          order: [['currency_code', 'ASC']],
+          order: [['id_currency', 'DESC']],
           offset: (page - 1) * limit,
           limit,
           ...options,
@@ -703,8 +702,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           where: journalWhere(filters),
           include: journalInclude(movementWhere(filters)),
           order: [
-            [{ model: MovementModel, as: 'movement' }, 'created_at', 'ASC'],
-            ['id_day', 'ASC'],
+            [{ model: MovementModel, as: 'movement' }, 'created_at', 'DESC'],
+            ['id_day', 'DESC'],
           ],
           offset: (filters.page - 1) * filters.limit,
           limit: filters.limit,
@@ -725,12 +724,13 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             },
           }),
         };
+        // الأحدث أولاً؛ الرصيد الجاري يُحسب في use case انطلاقاً من الختامي نزولاً.
         const page = await JournalEntryModel.findAndCountAll({
           where: periodWhere,
           include: journalInclude(statementMovementWhere),
           order: [
-            [{ model: MovementModel, as: 'movement' }, 'created_at', 'ASC'],
-            ['id_day', 'ASC'],
+            [{ model: MovementModel, as: 'movement' }, 'created_at', 'DESC'],
+            ['id_day', 'DESC'],
           ],
           offset: (filters.page - 1) * filters.limit,
           limit: filters.limit,
@@ -746,12 +746,13 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         let beforePage = { us: '0', them: '0' };
         const first = page.rows[0];
         if (first && filters.page > 1) {
+          // القيود الأحدث من الصفحة الحالية (تسبقها في الترتيب التنازلي).
           const preceding = await JournalEntryModel.findAll({
             where: periodWhere,
             include: journalInclude(statementMovementWhere),
             order: [
-              [{ model: MovementModel, as: 'movement' }, 'created_at', 'ASC'],
-              ['id_day', 'ASC'],
+              [{ model: MovementModel, as: 'movement' }, 'created_at', 'DESC'],
+              ['id_day', 'DESC'],
             ],
             limit: (filters.page - 1) * filters.limit,
             ...options,
@@ -872,6 +873,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             notification_type: i.type,
             movement_id: i.movementId,
             is_read: i.isRead,
+            actor_id: i.actorId ?? null,
+            actor_name: i.actorName ?? null,
           },
           options,
         );
@@ -898,6 +901,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             type: m.notification_type,
             movementId: m.movement_id,
             isRead: m.is_read,
+            actorId: m.actor_id,
+            actorName: m.actor_name,
             createdAt: m.created_at?.toISOString(),
           })),
         };

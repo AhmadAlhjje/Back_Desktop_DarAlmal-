@@ -85,6 +85,8 @@ export interface MovementListFilters {
   dateTo?: string;
   movementTypeId?: string;
   clientId?: string;
+  /** حركة تحتوي قيداً بهذه العملة. */
+  currencyId?: string;
   status?: string;
   movementNo?: string;
   createdBy?: string;

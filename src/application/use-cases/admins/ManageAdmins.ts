@@ -37,6 +37,10 @@ export class ManageAdmins {
     if (!value) throw new ApplicationError('ADMIN_NOT_FOUND', 'Admin not found', 404);
     return safe(value);
   }
+  /** إعادة تفعيل إداري معطّل. */
+  activate(id: string) {
+    return this.update(id, { isActive: true });
+  }
   async deactivate(id: string, actorId: string) {
     if (id === actorId)
       throw new ApplicationError('CANNOT_DEACTIVATE_SELF', 'You cannot deactivate your own admin', 409);

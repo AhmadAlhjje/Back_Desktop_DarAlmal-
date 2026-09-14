@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GetClientStatement } from '../../src/application/use-cases/journal/GetClientStatement.js';
 import { EntrySide } from '../../src/domain/enums/EntrySide.js';
 describe('GetClientStatement', () => {
-  it('uses opening and prior-page position for running balance', async () => {
+  it('newest-first: running balance = closing minus effect of newer entries', async () => {
     const journal: any = {
       findStatementPage: async () => ({
         count: 3,
@@ -41,7 +41,8 @@ describe('GetClientStatement', () => {
       limit: 1,
     });
     expect(result.openingBalance).toBe('700.0000');
-    expect(result.entries[0].runningBalance).toBe('800.0000');
+    // الختامي 750؛ القيود الأحدث من الصفحة (THEM 100) تُطرح من أثرها ⇒ الرصيد بعد هذا القيد = 850.
+    expect(result.entries[0].runningBalance).toBe('850.0000');
     expect(result.closingBalance).toBe('750.0000');
   });
 });

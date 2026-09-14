@@ -23,9 +23,12 @@ export class GetClientStatement {
     if (!client) throw new ApplicationError('CLIENT_NOT_FOUND', 'Client not found', 404);
     if (!currency) throw new ApplicationError('CURRENCY_NOT_FOUND', 'Currency not found', 404);
     const openingBalance = net(result.opening);
-    let running = openingBalance.add(net(result.beforePage));
+    // الصفوف بترتيب تنازلي (الأحدث أولاً): نبدأ من الرصيد بعد أحدث قيد في الصفحة
+    // = الافتتاحي + صافي الفترة − صافي القيود الأحدث من الصفحة، ثم ننزل بطرح أثر كل قيد.
+    let running = openingBalance.add(net(result.period)).sub(net(result.beforePage));
     const entries = result.rows.map((entry) => {
-      running = entry.side === EntrySide.US ? running.add(entry.amount) : running.sub(entry.amount);
+      const balanceAfter = running;
+      running = entry.side === EntrySide.US ? running.sub(entry.amount) : running.add(entry.amount);
       return {
         movementId: entry.movementId,
         movementNo: entry.movementNo,
@@ -39,7 +42,7 @@ export class GetClientStatement {
         side: entry.side,
         exchangeRate: entry.exchangeRate,
         fees: entry.fees,
-        runningBalance: running.toFixed(4),
+        runningBalance: balanceAfter.toFixed(4),
       };
     });
     return {

@@ -18,4 +18,8 @@ export class ManageCurrencies {
   deactivate(id: string) {
     return this.update(id, { isActive: false });
   }
+  /** إعادة تفعيل عملة معطّلة (كل ما يُعطَّل يمكن إعادة تفعيله). */
+  activate(id: string) {
+    return this.update(id, { isActive: true });
+  }
 }
