@@ -15,6 +15,8 @@ export const MovementMapper = {
       status: m.status as MovementStatus,
       createdBy: m.created_by,
       updatedBy: m.updated_by,
+      createdAt: m.created_at.toISOString(),
+      updatedAt: (m.updated_at ?? m.created_at).toISOString(),
     };
   },
 };

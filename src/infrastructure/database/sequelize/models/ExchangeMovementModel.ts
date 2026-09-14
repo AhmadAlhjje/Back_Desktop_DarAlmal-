@@ -7,10 +7,10 @@ export class ExchangeMovementModel extends Model {
   @Column(DataType.TEXT) declare statement: string | null;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare first_client_id: string;
   @Column(DataType.BIGINT.UNSIGNED) declare second_client_id: string | null;
-  @Column({ type: DataType.DECIMAL(20, 8), allowNull: false }) declare exchange_rate: string;
+  @Column({ type: DataType.DECIMAL(30, 10), allowNull: false }) declare exchange_rate: string;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare first_currency_id: string;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare second_currency_id: string;
-  @Column({ type: DataType.DECIMAL(20, 4), allowNull: false }) declare total_us: string;
-  @Column({ type: DataType.DECIMAL(20, 4), allowNull: false }) declare total_them: string;
-  @Column({ type: DataType.DECIMAL(20, 4), allowNull: false }) declare result: string;
+  @Column({ type: DataType.DECIMAL(30, 10), allowNull: false }) declare total_us: string;
+  @Column({ type: DataType.DECIMAL(30, 10), allowNull: false }) declare total_them: string;
+  @Column({ type: DataType.DECIMAL(30, 10), allowNull: false }) declare result: string;
 }

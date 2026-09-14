@@ -7,6 +7,7 @@ import type {
   JournalRepository,
 } from '../../ports/repositories/types.js';
 import { ApplicationError } from '../../errors/ApplicationError.js';
+import { AMOUNT_SCALE } from '../../../domain/value-objects/Precision.js';
 const net = (value: { us: string; them: string }) => new Decimal(value.us).minus(value.them);
 export class GetClientStatement {
   constructor(
@@ -42,17 +43,17 @@ export class GetClientStatement {
         side: entry.side,
         exchangeRate: entry.exchangeRate,
         fees: entry.fees,
-        runningBalance: balanceAfter.toFixed(4),
+        runningBalance: balanceAfter.toFixed(AMOUNT_SCALE),
       };
     });
     return {
       client: { id: client.id, code: client.code, fullName: client.fullName },
       currency: { id: currency.id, code: currency.code, name: currency.name, symbol: currency.symbol },
-      openingBalance: openingBalance.toFixed(4),
+      openingBalance: openingBalance.toFixed(AMOUNT_SCALE),
       entries,
       totalUs: result.period.us,
       totalThem: result.period.them,
-      closingBalance: openingBalance.add(net(result.period)).toFixed(4),
+      closingBalance: openingBalance.add(net(result.period)).toFixed(AMOUNT_SCALE),
       pagination: {
         page: filters.page,
         limit: filters.limit,

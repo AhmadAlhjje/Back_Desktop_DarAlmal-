@@ -40,9 +40,9 @@ describe('GetClientStatement', () => {
       page: 2,
       limit: 1,
     });
-    expect(result.openingBalance).toBe('700.0000');
+    expect(result.openingBalance).toBe('700.0000000000');
     // الختامي 750؛ القيود الأحدث من الصفحة (THEM 100) تُطرح من أثرها ⇒ الرصيد بعد هذا القيد = 850.
-    expect(result.entries[0].runningBalance).toBe('850.0000');
-    expect(result.closingBalance).toBe('750.0000');
+    expect(result.entries[0].runningBalance).toBe('850.0000000000');
+    expect(result.closingBalance).toBe('750.0000000000');
   });
 });

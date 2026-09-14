@@ -9,7 +9,7 @@ export class CurrencyModel extends Model {
   @Column(DataType.STRING(500)) declare icon_path: string | null;
   @Column(DataType.STRING(20)) declare text_icon: string | null;
   @Column({ type: DataType.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 }) declare importance: number;
-  @Column({ type: DataType.DECIMAL(20, 8), allowNull: false, defaultValue: '1.00000000' })
+  @Column({ type: DataType.DECIMAL(30, 10), allowNull: false, defaultValue: '1.0000000000' })
   declare exchange_rate: string;
   @Column({ type: DataType.ENUM('FROM_USD_MULTIPLY', 'TO_USD_DIVIDE'), allowNull: false })
   declare exchange_type: 'FROM_USD_MULTIPLY' | 'TO_USD_DIVIDE';

@@ -1,5 +1,6 @@
 import { Decimal } from 'decimal.js';
 import { InvalidAmountError } from '../errors/InvalidAmountError.js';
+import { AMOUNT_SCALE } from './Precision.js';
 
 export class Money {
   private constructor(private readonly value: Decimal) {}
@@ -41,7 +42,7 @@ export class Money {
   equals(other: Money): boolean {
     return this.value.equals(other.value);
   }
-  toString(scale = 4): string {
+  toString(scale = AMOUNT_SCALE): string {
     return this.value.toFixed(scale);
   }
 }

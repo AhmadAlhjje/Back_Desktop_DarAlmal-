@@ -11,7 +11,7 @@ const original: any = {
   description: null,
   movementDate: '2026-01-01',
   movementTime: '10:00:00',
-  totalResult: '25.0000',
+  totalResult: '25.0000000000',
   status: MovementStatus.POSTED,
   createdBy: '1',
   updatedBy: null,
@@ -72,7 +72,7 @@ describe('movement lifecycle', () => {
     const reversed = createMany.mock.calls[0][0];
     expect(reversed.map((e: any) => e.side)).toEqual([EntrySide.THEM, EntrySide.US]);
     expect(entries.map((e) => e.side)).toEqual([EntrySide.US, EntrySide.THEM]);
-    expect(result.reverseMovement.totalResult).toBe('-25.0000');
+    expect(result.reverseMovement.totalResult).toBe('-25.0000000000');
     expect(updateStatus).toHaveBeenCalledWith('10', MovementStatus.REVERSED, '9');
   });
 });

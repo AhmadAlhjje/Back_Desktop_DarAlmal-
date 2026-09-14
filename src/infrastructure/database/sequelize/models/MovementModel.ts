@@ -6,7 +6,7 @@ export class MovementModel extends Model {
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare movement_type_id: string;
   @Column(DataType.BIGINT.UNSIGNED) declare client_id: string | null;
   @Column({ type: DataType.TIME, allowNull: false }) declare movement_time: string;
-  @Column({ type: DataType.DECIMAL(20, 4), allowNull: false, defaultValue: '0.0000' }) declare total_result: string;
+  @Column({ type: DataType.DECIMAL(30, 10), allowNull: false, defaultValue: '0.0000000000' }) declare total_result: string;
   @Column({ type: DataType.ENUM('DRAFT', 'POSTED', 'CANCELLED', 'REVERSED'), allowNull: false, defaultValue: 'POSTED' })
   declare status: string;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare created_by: string;

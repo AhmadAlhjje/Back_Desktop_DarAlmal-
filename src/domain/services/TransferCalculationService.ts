@@ -1,6 +1,7 @@
 import { Decimal } from 'decimal.js';
 import { Money } from '../value-objects/Money.js';
 import { ExchangeRate } from '../value-objects/ExchangeRate.js';
+import { AMOUNT_SCALE } from '../value-objects/Precision.js';
 
 export interface TransferCalculationInput {
   amount: string;
@@ -21,7 +22,7 @@ export class TransferCalculationService {
     return {
       totalUs: us.toString(),
       totalThem: them.toString(),
-      result: new Decimal(us.toString()).minus(them.toString()).toFixed(4),
+      result: new Decimal(us.toString()).minus(them.toString()).toFixed(AMOUNT_SCALE),
     };
   }
 }

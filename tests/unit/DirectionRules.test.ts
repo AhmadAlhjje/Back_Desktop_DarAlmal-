@@ -48,7 +48,7 @@ describe('locked direction rules', () => {
     const lines = r.journal.mock.calls[0][0];
     expect(lines.map((x: any) => x.side)).toEqual([EntrySide.THEM, EntrySide.US]);
     expect(r.value.exchangeRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ totalUs: '12500000.0000', totalThem: '1000.0000', profitLoss: '0.0000' }),
+      expect.objectContaining({ totalUs: '12500000.0000000000', totalThem: '1000.0000000000', profitLoss: '0.0000000000' }),
     );
   });
 });

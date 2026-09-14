@@ -1,4 +1,5 @@
 import { Decimal } from 'decimal.js';
+import { AMOUNT_SCALE, ZERO_AMOUNT } from '../value-objects/Precision.js';
 
 export type CurrencyExchangeType = 'FROM_USD_MULTIPLY' | 'TO_USD_DIVIDE';
 
@@ -10,12 +11,12 @@ export type CurrencyExchangeType = 'FROM_USD_MULTIPLY' | 'TO_USD_DIVIDE';
  * كل الحسابات بـ decimal.js؛ النتيجة بأربع منازل.
  */
 export class BalanceValuationService {
-  static readonly SCALE = 4;
+  static readonly SCALE = AMOUNT_SCALE;
 
   toUsd(amount: string, exchangeRate: string, exchangeType: CurrencyExchangeType): string {
     const value = new Decimal(amount || '0');
     const rate = new Decimal(exchangeRate || '0');
-    if (!rate.isFinite() || rate.lte(0)) return '0.0000';
+    if (!rate.isFinite() || rate.lte(0)) return ZERO_AMOUNT;
     const valued = exchangeType === 'FROM_USD_MULTIPLY' ? value.div(rate) : value.mul(rate);
     return valued.toFixed(BalanceValuationService.SCALE);
   }

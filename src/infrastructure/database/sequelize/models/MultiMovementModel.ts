@@ -9,5 +9,5 @@ export class MultiMovementModel extends Model {
   declare party_side: 'DEBIT_US' | 'CREDIT_US';
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare client_id: string;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare currency_id: string;
-  @Column({ type: DataType.DECIMAL(20, 4), allowNull: false }) declare amount: string;
+  @Column({ type: DataType.DECIMAL(30, 10), allowNull: false }) declare amount: string;
 }

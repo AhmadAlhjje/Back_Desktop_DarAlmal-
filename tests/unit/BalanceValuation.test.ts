@@ -22,16 +22,16 @@ const row = (o: Partial<BalanceAggregateRow>): BalanceAggregateRow => ({
 
 describe('BalanceValuationService', () => {
   it('values FROM_USD_MULTIPLY by division and TO_USD_DIVIDE by multiplication', () => {
-    expect(svc.toUsd('47950', '47.95', 'FROM_USD_MULTIPLY')).toBe('1000.0000');
-    expect(svc.toUsd('1000', '1.135', 'TO_USD_DIVIDE')).toBe('1135.0000');
-    expect(svc.toUsd('-13513', '13513', 'FROM_USD_MULTIPLY')).toBe('-1.0000');
+    expect(svc.toUsd('47950', '47.95', 'FROM_USD_MULTIPLY')).toBe('1000.0000000000');
+    expect(svc.toUsd('1000', '1.135', 'TO_USD_DIVIDE')).toBe('1135.0000000000');
+    expect(svc.toUsd('-13513', '13513', 'FROM_USD_MULTIPLY')).toBe('-1.0000000000');
   });
   it('rejects non-positive rates safely', () => {
-    expect(svc.toUsd('100', '0', 'FROM_USD_MULTIPLY')).toBe('0.0000');
+    expect(svc.toUsd('100', '0', 'FROM_USD_MULTIPLY')).toBe('0.0000000000');
   });
   it('net = us - them with 4 decimals', () => {
-    expect(svc.net('1010', '1002')).toBe('8.0000');
-    expect(svc.net('0', '3200')).toBe('-3200.0000');
+    expect(svc.net('1010', '1002')).toBe('8.0000000000');
+    expect(svc.net('0', '3200')).toBe('-3200.0000000000');
   });
 });
 
@@ -47,15 +47,15 @@ describe('GetBalanceSheet', () => {
     const r = await new GetBalanceSheet(reports).execute({ mode: 'valued', detail: 'simple' });
     expect(r.rows.map((x) => x.client.fullName)).toEqual(['A', 'B']);
     const b = r.rows[1];
-    expect(b.totalUs).toBe('100.0000'); // 4000 TRY / 40
-    expect(b.totalThem).toBe('1002.0000');
-    expect(b.balanceThem).toBe('902.0000');
-    expect(r.totals.difference).toBe('108.0000'); // 1010 - 902
+    expect(b.totalUs).toBe('100.0000000000'); // 4000 TRY / 40
+    expect(b.totalThem).toBe('1002.0000000000');
+    expect(b.balanceThem).toBe('902.0000000000');
+    expect(r.totals.difference).toBe('108.0000000000'); // 1010 - 902
   });
   it('currency/full keeps one row per currency including balanced ones', async () => {
     const r = await new GetBalanceSheet(reports).execute({ mode: 'currency', detail: 'full' });
     expect(r.rows).toHaveLength(4);
     expect(r.rows[2].currency?.code).toBe('TRY');
-    expect(r.rows[2].balanceUs).toBe('4000.0000');
+    expect(r.rows[2].balanceUs).toBe('4000.0000000000');
   });
 });

@@ -6,6 +6,7 @@ import { ApplicationError } from '../../errors/ApplicationError.js';
 import type { Clock } from '../../ports/services/Clock.js';
 import type { UnitOfWork } from '../../ports/services/UnitOfWork.js';
 import { movementTimestamp, newMovementId } from './helpers.js';
+import { AMOUNT_SCALE } from '../../../domain/value-objects/Precision.js';
 export interface SourceEntry {
   clientId: string;
   currencyId: string;
@@ -52,7 +53,7 @@ export class CreateJournalMovement {
       const id = newMovementId();
       const result = input.entries
         .reduce((sum, e) => (e.side === EntrySide.US ? sum.add(e.amount) : sum.sub(e.amount)), new Decimal(0))
-        .toFixed(4);
+        .toFixed(AMOUNT_SCALE);
       const movement = await r.movementRepository.create({
         id,
         movementNo: id,

@@ -1,6 +1,7 @@
 import { Decimal } from 'decimal.js';
 import { Money } from '../value-objects/Money.js';
 import { ExchangeRate } from '../value-objects/ExchangeRate.js';
+import { AMOUNT_SCALE } from '../value-objects/Precision.js';
 export class ExchangeCalculationService {
   calculate(
     fromAmount: string,
@@ -14,7 +15,7 @@ export class ExchangeCalculationService {
     return {
       totalUs: target.toString(),
       totalThem: source.toString(),
-      profitLoss: new Decimal(source.toString()).minus(valuedTargetInSourceCurrency).toFixed(4),
+      profitLoss: new Decimal(source.toString()).minus(valuedTargetInSourceCurrency).toFixed(AMOUNT_SCALE),
     };
   }
 }

@@ -85,6 +85,9 @@ export interface Movement {
   status: MovementStatus;
   createdBy: string;
   updatedBy: string | null;
+  /** طوابع الإنشاء وآخر تعديل (ISO) للعرض في سجل الإنشاء والتعديل. */
+  createdAt?: string;
+  updatedAt?: string;
 }
 export interface JournalEntry {
   id?: string;

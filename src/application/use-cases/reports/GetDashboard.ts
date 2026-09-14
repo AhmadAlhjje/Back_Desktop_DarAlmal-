@@ -3,6 +3,7 @@ import { BalanceValuationService } from '../../../domain/services/BalanceValuati
 import type { ReportsRepository } from '../../ports/repositories/ReportsRepository.js';
 import type { MovementRepository } from '../../ports/repositories/types.js';
 import type { Clock } from '../../ports/services/Clock.js';
+import { AMOUNT_SCALE } from '../../../domain/value-objects/Precision.js';
 
 interface CurrencyAccumulator {
   currency: Record<string, unknown>;
@@ -48,11 +49,11 @@ export class GetDashboard {
       byCurrency.set(r.currencyId, acc);
     }
     const currencies = [...byCurrency.values()].map((c) => {
-      const balance = c.us.minus(c.them).toFixed(4);
+      const balance = c.us.minus(c.them).toFixed(AMOUNT_SCALE);
       return {
         currency: c.currency,
-        totalUs: c.us.toFixed(4),
-        totalThem: c.them.toFixed(4),
+        totalUs: c.us.toFixed(AMOUNT_SCALE),
+        totalThem: c.them.toFixed(AMOUNT_SCALE),
         balance,
         valuedUsd: this.valuation.toUsd(balance, c.rate, c.type),
       };

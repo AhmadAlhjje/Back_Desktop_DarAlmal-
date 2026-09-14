@@ -1,6 +1,7 @@
 import { Decimal } from 'decimal.js';
 import { BalanceValuationService } from '../../../domain/services/BalanceValuationService.js';
 import type { BalanceAggregateRow, ReportsRepository } from '../../ports/repositories/ReportsRepository.js';
+import { AMOUNT_SCALE, ZERO_AMOUNT } from '../../../domain/value-objects/Precision.js';
 
 export interface BalanceSheetFilters {
   asOf?: string;
@@ -54,7 +55,7 @@ export class GetBalanceSheet {
       detail: filters.detail,
       asOf: filters.asOf ?? null,
       rows: visible.map((i, index) => ({ index: index + 1, ...i })),
-      totals: { ...totals, difference: new Decimal(totals.balanceUs).minus(totals.balanceThem).toFixed(4) },
+      totals: { ...totals, difference: new Decimal(totals.balanceUs).minus(totals.balanceThem).toFixed(AMOUNT_SCALE) },
     };
   }
 
@@ -63,8 +64,8 @@ export class GetBalanceSheet {
       const balance = this.valuation.net(r.totalUs, r.totalThem);
       const positive = new Decimal(balance).gt(0);
       const toUsd = (v: string) => this.valuation.toUsd(v, r.exchangeRate, r.exchangeType);
-      const balanceUs = positive ? balance : '0.0000';
-      const balanceThem = positive ? '0.0000' : new Decimal(balance).abs().toFixed(4);
+      const balanceUs = positive ? balance : ZERO_AMOUNT;
+      const balanceThem = positive ? ZERO_AMOUNT : new Decimal(balance).abs().toFixed(AMOUNT_SCALE);
       return {
         client: { id: r.clientId, code: r.clientCode, fullName: r.clientName },
         currency: { id: r.currencyId, code: r.currencyCode, name: r.currencyName, decimalPlaces: r.decimalPlaces },
@@ -93,8 +94,8 @@ export class GetBalanceSheet {
       const totalThem = this.valuation.sum(list.map((r) => r.valuedTotalThem));
       const balance = this.valuation.net(totalUs, totalThem);
       const positive = new Decimal(balance).gt(0);
-      const balanceUs = positive ? balance : '0.0000';
-      const balanceThem = positive ? '0.0000' : new Decimal(balance).abs().toFixed(4);
+      const balanceUs = positive ? balance : ZERO_AMOUNT;
+      const balanceThem = positive ? ZERO_AMOUNT : new Decimal(balance).abs().toFixed(AMOUNT_SCALE);
       return {
         client: list[0].client,
         currency: null,

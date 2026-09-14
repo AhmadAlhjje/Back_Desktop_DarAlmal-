@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { DECIMAL_PATTERN } from '../../../domain/value-objects/Precision.js';
 const id = z.string().regex(/^\d+$/);
-const decimal = z.string().regex(/^\d+(\.\d{1,8})?$/);
+const decimal = z.string().regex(DECIMAL_PATTERN);
 export const createTransferSchema = z
   .object({
     statement: z.string().optional(),

@@ -1,5 +1,6 @@
 import { Decimal } from 'decimal.js';
 import { DomainError } from '../errors/DomainError.js';
+import { AMOUNT_SCALE } from './Precision.js';
 export class Percentage {
   private constructor(private readonly value: Decimal) {}
   static of(value: string): Percentage {
@@ -9,9 +10,9 @@ export class Percentage {
     return new Percentage(number);
   }
   ofAmount(amount: string): string {
-    return new Decimal(amount).mul(this.value).div(100).toFixed(4);
+    return new Decimal(amount).mul(this.value).div(100).toFixed(AMOUNT_SCALE);
   }
   toString(): string {
-    return this.value.toFixed(4);
+    return this.value.toFixed(AMOUNT_SCALE);
   }
 }

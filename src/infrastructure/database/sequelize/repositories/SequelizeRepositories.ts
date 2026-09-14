@@ -26,6 +26,7 @@ import type { MovementStatus } from '../../../../domain/enums/MovementStatus.js'
 import { EntrySide } from '../../../../domain/enums/EntrySide.js';
 import type { Logger } from '../../../../application/ports/services/Logger.js';
 import { mapDatabaseError } from '../DatabaseErrorMapper.js';
+import { AMOUNT_SCALE, ZERO_AMOUNT, isZeroAmount } from '../../../../domain/value-objects/Precision.js';
 
 export function createRepositories(transaction?: Transaction, logger?: Logger): Repositories {
   const options = transaction ? { transaction } : {};
@@ -127,10 +128,10 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       lineNo: Number(row.id_day),
       clientId: row.client_id,
       currencyId: row.currency_id,
-      amount: row.amount_us !== '0.0000' ? row.amount_us : row.amount_them,
-      side: row.amount_us !== '0.0000' ? EntrySide.US : EntrySide.THEM,
+      amount: !isZeroAmount(row.amount_us) ? row.amount_us : row.amount_them,
+      side: !isZeroAmount(row.amount_us) ? EntrySide.US : EntrySide.THEM,
       exchangeRate: null,
-      fees: '0.0000',
+      fees: ZERO_AMOUNT,
       feePercentage: null,
       description: row.description,
       movementDate: movement.created_at.toISOString().slice(0, 10),
@@ -543,10 +544,10 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
               lineNo: Number(e.id_day),
               clientId: e.client_id,
               currencyId: e.currency_id,
-              amount: e.amount_us !== '0.0000' ? e.amount_us : e.amount_them,
-              side: e.amount_us !== '0.0000' ? EntrySide.US : EntrySide.THEM,
+              amount: !isZeroAmount(e.amount_us) ? e.amount_us : e.amount_them,
+              side: !isZeroAmount(e.amount_us) ? EntrySide.US : EntrySide.THEM,
               exchangeRate: null,
-              fees: '0.0000',
+              fees: ZERO_AMOUNT,
               feePercentage: null,
               description: e.description,
               movementDate: row.created_at.toISOString().slice(0, 10),
@@ -667,8 +668,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             movement_id: e.movementId,
             client_id: e.clientId,
             currency_id: e.currencyId,
-            amount_us: e.side === EntrySide.US ? e.amount : '0.0000',
-            amount_them: e.side === EntrySide.THEM ? e.amount : '0.0000',
+            amount_us: e.side === EntrySide.US ? e.amount : ZERO_AMOUNT,
+            amount_them: e.side === EntrySide.THEM ? e.amount : ZERO_AMOUNT,
             description: e.description,
             movement_time: e.movementTime,
           })),
@@ -687,10 +688,10 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           lineNo: Number(e.id_day),
           clientId: e.client_id,
           currencyId: e.currency_id,
-          amount: e.amount_us !== '0.0000' ? e.amount_us : e.amount_them,
-          side: e.amount_us !== '0.0000' ? EntrySide.US : EntrySide.THEM,
+          amount: !isZeroAmount(e.amount_us) ? e.amount_us : e.amount_them,
+          side: !isZeroAmount(e.amount_us) ? EntrySide.US : EntrySide.THEM,
           exchangeRate: null,
-          fees: '0.0000',
+          fees: ZERO_AMOUNT,
           feePercentage: null,
           description: e.description,
           movementDate: e.created_at.toISOString().slice(0, 10),
@@ -759,8 +760,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           });
           beforePage = preceding.reduce(
             (sum, entry) => ({
-              us: new Decimal(sum.us).plus(entry.amount_us).toFixed(4),
-              them: new Decimal(sum.them).plus(entry.amount_them).toFixed(4),
+              us: new Decimal(sum.us).plus(entry.amount_us).toFixed(AMOUNT_SCALE),
+              them: new Decimal(sum.them).plus(entry.amount_them).toFixed(AMOUNT_SCALE),
             }),
             { us: '0', them: '0' },
           );

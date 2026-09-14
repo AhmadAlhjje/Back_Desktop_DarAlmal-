@@ -9,8 +9,8 @@ export class SettlementMovementModel extends Model {
   @Column(DataType.BIGINT.UNSIGNED) declare second_client_id: string | null;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare first_currency_id: string;
   @Column(DataType.BIGINT.UNSIGNED) declare second_currency_id: string | null;
-  @Column({ type: DataType.DECIMAL(20, 4), allowNull: false }) declare first_amount: string;
-  @Column(DataType.DECIMAL(20, 4)) declare second_amount: string | null;
+  @Column({ type: DataType.DECIMAL(30, 10), allowNull: false }) declare first_amount: string;
+  @Column(DataType.DECIMAL(30, 10)) declare second_amount: string | null;
   @Column({ type: DataType.ENUM('SETTLEMENT', 'ACCREDITATION', 'RECEIPT', 'PAYMENT'), allowNull: false })
   declare movement_kind: 'SETTLEMENT' | 'ACCREDITATION' | 'RECEIPT' | 'PAYMENT';
   @Column(DataType.ENUM('SETTLEMENT', 'ACCREDITATION'))

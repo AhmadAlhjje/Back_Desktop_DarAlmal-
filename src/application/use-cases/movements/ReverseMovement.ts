@@ -5,6 +5,7 @@ import { ApplicationError } from '../../errors/ApplicationError.js';
 import type { Clock } from '../../ports/services/Clock.js';
 import type { UnitOfWork } from '../../ports/services/UnitOfWork.js';
 import { movementTimestamp, newMovementId } from './helpers.js';
+import { AMOUNT_SCALE } from '../../../domain/value-objects/Precision.js';
 export class ReverseMovement {
   constructor(
     private uow: UnitOfWork,
@@ -29,7 +30,7 @@ export class ReverseMovement {
         description: `Reversal of movement ${original.movementNo}`,
         movementDate: date,
         movementTime: time,
-        totalResult: new Decimal(original.totalResult).negated().toFixed(4),
+        totalResult: new Decimal(original.totalResult).negated().toFixed(AMOUNT_SCALE),
         status: MovementStatus.POSTED,
         createdBy: adminId,
         updatedBy: null,

@@ -1,5 +1,6 @@
 import { Decimal } from 'decimal.js';
 import { EntrySide } from '../enums/EntrySide.js';
+import { AMOUNT_SCALE } from '../value-objects/Precision.js';
 export interface BalanceLine {
   amount: string;
   side: EntrySide;
@@ -12,6 +13,6 @@ export class BalanceCalculationService {
         const amount = new Decimal(line.amount).add(line.fees ?? '0');
         return line.side === EntrySide.US ? balance.add(amount) : balance.sub(amount);
       }, new Decimal(opening))
-      .toFixed(4);
+      .toFixed(AMOUNT_SCALE);
   }
 }

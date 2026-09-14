@@ -108,7 +108,13 @@
 - `GET /movements` يقبل `currency_id` (فلتر بوجود قيد بتلك العملة) إضافةً إلى `client_id`؛ الواجهة تبني «دفتر اليومية» بصف واحد لكل حركة من هذه النقطة مع ملخص `GET /journal`.
 - `GET /reports/balance-sheet` يمرّر `includeSecret` لدور ADMIN فقط.
 - «تعديل الحركة» غير موجود كنقطة في الباك اند بقرار: التعديل = `POST /movements/:id/reverse` ثم إنشاء حركة جديدة من الواجهة؛ الحركات المرحّلة لا تُعدَّل في مكانها.
+- الحركة تعيد `createdAt/updatedAt` (ISO) و`GET /movements/:id` يعيد `updatedBy` (الإداري الذي ألغى/عكس) لعرض «آخر تعديل بواسطة/الوقت».
 
+## الدقة العشرية 10 منازل — معتمد 2026-09-14
+
+- قرار المستخدم: المبالغ والأسعار ليست محدودة بمنزلتين أو أربع؛ تُخزَّن وتُعاد بعشر منازل عشرية. migration `20260914000200-decimal-precision-10`: المبالغ `DECIMAL(20,4)` → `DECIMAL(30,10)`، الأسعار `DECIMAL(20,8)` → `DECIMAL(30,10)`، نسب الأجور `DECIMAL(10,4)` → `DECIMAL(20,10)` (توسيع بلا تغيير قيم).
+- الثوابت في `domain/value-objects/Precision.ts`: `AMOUNT_SCALE = RATE_SCALE = 10`، `ZERO_AMOUNT`، `UNIT_RATE`، `DECIMAL_PATTERN = /^\d+(\.\d{1,10})?$/` (كل validators تستعمله)، و`isZeroAmount()` بدل أي مقارنة نصية مع `'0.0000'`. **يُمنع** `toFixed(4)`/`toFixed(8)` أو أرقام سحرية للدقة خارج هذا الملف.
+- `currencies.decimal_places` (0..10) معلومة وصفية للعرض فقط ولا تؤثر في أي حساب.
 ## الأمان وجودة الكود
 
 - كلمات المرور تخزن bcrypt hashes فقط، ولا يعاد أو يسجل `password_hash` أو password أو JWT.
