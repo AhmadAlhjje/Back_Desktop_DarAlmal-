@@ -128,8 +128,10 @@
 
 - **عكس الحركة في مكانها** (`POST /movements/:id/reverse`, `ReverseMovement`): لا تُنشأ حركة عكسية؛ تُقلب أطراف الحركة نفسها بنفس الرقم: قيود اليومية `flipSides` (لنا ↔ علينا)، الحوالة `swapSides` (من ↔ إلى بكل حقولهما)، التصريف (العملتان والمجاميع تتبادلان، السعر = 1 ÷ السعر، النتيجة تُعكس)، القبض ↔ الدفع (نوع الحركة و`movement_kind`)، `total_result` يُعكس. تبقى `POSTED` فتُحتسب بأثرها الجديد؛ `movements.reversed_at/reversed_by` (migration `20260915000200`) يوثّقان العكس، وعكسها مجدداً يعيدها ويمسح العلم. الرد `{ movement, reversed }`. «الإلغاء» يبقى الوسيلة لإزالة الأثر كلياً.
 - **تعديل الحركة في مكانها** (`PUT /movements/{transfers|settlements|multi|receipts|payments|exchanges}/:id`، يحتاج `movement.create` **و**`movement.reverse`): `Create*.replace(id, input, adminId)` يعيد التحقق والحساب نفسه (`prepare`) ثم `clearContents` (حذف القيود وصفوف التفاصيل) وإعادة الكتابة بنفس المعرّف وبتاريخ/وقت الحركة الأصلية، ويحدّث الرأس (`updateContents`: client/description/total_result/updated_by، ولسند القبض/الدفع النوع). لا يُسمح إلا لحركة `POSTED` ومن النوع نفسه (`MOVEMENT_TYPE_MISMATCH`). الرد `{ movement, detail?, changes[] }`.
+- **لا إشعار عند إنشاء الحركات** (قرار المستخدم 2026-09-15): إشعارات الحركات للتعديل والعكس والإلغاء فقط.
 - **إشعار التعديل**: `describeMovement()` يصف الحركة بالعربية (أسماء لا معرّفات) قبل وبعد، و`diffDescriptions()` يعطي الفروق، والرسالة «تعديل حوالة #N: المبلغ: من 1000 إلى 1200؛ إلى حساب: من أحمد إلى باسل».
 - **بثّ فوري (SSE)**: `GET /notifications/stream` (مصادقة Bearer) يبقى مفتوحاً ويرسل `event: notification` لكل إشعار جديد للإداري الحالي لحظة إنشائه (`NotificationHub` في `infrastructure/realtime` عبر منفذ `NotificationPublisher` المحقون في `NotifyAdmins`)، مع نبضة كل 20 ث. الواجهة تعتمده بدل الاستطلاع (الاستطلاع كل 60 ث احتياط).
+- **لا تعتمد على عدد الصفوف المتأثرة** في `update` لتقرير الوجود: MySQL يعيد 0 عندما لا تتغير القيم، فتعديلٌ بلا تغيير كان يصبح 404؛ الوجود يُقرَّر بـ `findByPk` بعد التحديث.
 - `newMovementId` انتقل مع `trimAmount/describeMovement/diffDescriptions/formatChanges` إلى `use-cases/movements/helpers.ts`؛ `loadEditableMovement` في `editing.ts`.
 ## الأمان وجودة الكود
 

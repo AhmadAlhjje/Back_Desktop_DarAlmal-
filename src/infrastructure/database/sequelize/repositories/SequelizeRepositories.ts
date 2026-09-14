@@ -210,8 +210,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           ...(i.isDeveloper !== undefined && { is_developer: i.isDeveloper }),
           ...(i.isActive !== undefined && { is_active: i.isActive }),
         };
-        const [count] = await AdminModel.update(data, { where: { id_admin: id }, ...options });
-        if (!count) return null;
+        await AdminModel.update(data, { where: { id_admin: id }, ...options });
         const m = await AdminModel.findByPk(id, options);
         return m ? AdminMapper.toDomain(m) : null;
       },
@@ -262,8 +261,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           ...(i.name !== undefined && { group_name: i.name }),
           ...(i.description !== undefined && { description: i.description }),
         };
-        const [count] = await ClientGroupModel.update(data, { where: { id_group: id }, ...options });
-        if (!count) return null;
+        await ClientGroupModel.update(data, { where: { id_group: id }, ...options });
         const m = await ClientGroupModel.findByPk(id, options);
         return m ? { id: m.id_group, name: m.group_name, description: m.description } : null;
       },
@@ -340,8 +338,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           ...(i.importance !== undefined && { importance: i.importance }),
           ...(i.accountType !== undefined && { account_type: i.accountType }),
         };
-        const [count] = await ClientModel.update(data, { where: { id_client: id }, ...options });
-        if (!count) return null;
+        await ClientModel.update(data, { where: { id_client: id }, ...options });
         const m = await ClientModel.findByPk(id, options);
         return m ? ClientMapper.toDomain(m) : null;
       },
@@ -354,23 +351,20 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         return m ? ClientMapper.toDomain(m) : null;
       },
       async setSecret(id, isSecret) {
-        const [count] = await ClientModel.update({ is_secret: isSecret }, { where: { id_client: id }, ...options });
-        if (!count) return null;
+        await ClientModel.update({ is_secret: isSecret }, { where: { id_client: id }, ...options });
         const m = await ClientModel.findByPk(id, options);
         return m ? ClientMapper.toDomain(m) : null;
       },
       async setArchived(id, archivedAt) {
-        const [count] = await ClientModel.update(
+        await ClientModel.update(
           { archived_at: archivedAt, ...(archivedAt ? { is_cash_box: false } : {}) },
           { where: { id_client: id }, ...options },
         );
-        if (!count) return null;
         const m = await ClientModel.findByPk(id, options);
         return m ? ClientMapper.toDomain(m) : null;
       },
       async setLastRollover(id, at) {
-        const [count] = await ClientModel.update({ last_rollover_at: at }, { where: { id_client: id }, ...options });
-        if (!count) return null;
+        await ClientModel.update({ last_rollover_at: at }, { where: { id_client: id }, ...options });
         const m = await ClientModel.findByPk(id, options);
         return m ? ClientMapper.toDomain(m) : null;
       },
@@ -429,8 +423,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           ...(i.exchangeType !== undefined && { exchange_type: i.exchangeType }),
           ...(i.isActive !== undefined && { is_active: i.isActive }),
         };
-        const [count] = await CurrencyModel.update(data, { where: { id_currency: id }, ...options });
-        if (!count) return null;
+        await CurrencyModel.update(data, { where: { id_currency: id }, ...options });
         const m = await CurrencyModel.findByPk(id, options);
         return m ? CurrencyMapper.toDomain(m) : null;
       },
@@ -468,8 +461,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           ...(i.description !== undefined && { description: i.description }),
           ...(i.isActive !== undefined && { is_active: i.isActive }),
         };
-        const [count] = await MovementTypeModel.update(data, { where: { id_movement_type: id }, ...options });
-        if (!count) return null;
+        await MovementTypeModel.update(data, { where: { id_movement_type: id }, ...options });
         const m = await MovementTypeModel.findByPk(id, options);
         return m
           ? {

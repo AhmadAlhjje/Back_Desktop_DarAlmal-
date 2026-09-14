@@ -52,6 +52,7 @@ import { uploadCurrencyIcon } from './middleware/currencyIconUpload.js';
 import { ApplicationError } from '../../application/errors/ApplicationError.js';
 import type { NotifyAdmins, NotificationEvent } from '../../application/use-cases/notifications/NotifyAdmins.js';
 import type { NotificationHub } from '../../infrastructure/realtime/NotificationHub.js';
+import type { Logger } from '../../application/ports/services/Logger.js';
 import { formatChanges, trimAmount, type MovementChange } from '../../application/use-cases/movements/helpers.js';
 import type { ResetSystemData } from '../../application/use-cases/system/ResetSystemData.js';
 import type { DeleteOwnAccount } from '../../application/use-cases/admins/DeleteOwnAccount.js';
@@ -69,12 +70,7 @@ const MOVEMENT_LABELS: Record<string, string> = {
   PAYMENT: 'سند دفع',
   EXCHANGE: 'تصريف',
 };
-const movementCreated = (kind: string, m: Movement, description?: string | null): NotificationEvent => ({
-  type: 'MOVEMENT',
-  movementId: m.id,
-  title: `${MOVEMENT_LABELS[kind] ?? kind} جديدة #${m.movementNo}`,
-  message: `تم إنشاء ${MOVEMENT_LABELS[kind] ?? kind} رقم ${m.movementNo}${description ? ` — ${description}` : ''}. المحصلة: ${trimAmount(m.totalResult)} $`,
-});
+// قرار المستخدم 2026-09-15: لا إشعار عند إنشاء الحركات — الإشعارات للتعديل والعكس والإلغاء فقط.
 /** إشعار تعديل حركة في مكانها: «تعديل من كذا إلى كذا» لكل حقل تغيّر. */
 const movementEdited = (kind: string, m: Movement, changes: MovementChange[]): NotificationEvent => ({
   type: 'MOVEMENT',
@@ -111,6 +107,7 @@ export function createRoutes(deps: {
   markNotificationRead: MarkNotificationRead;
   notifyAdmins: NotifyAdmins;
   notificationHub: NotificationHub;
+  logger: Logger;
   resetSystemData: ResetSystemData;
   deleteOwnAccount: DeleteOwnAccount;
   tokens: TokenService;
@@ -409,7 +406,6 @@ export function createRoutes(deps: {
     validate(createTransferSchema),
     asyncRoute(async (req, res) => {
       const result = await deps.createTransfer.execute({ ...req.body, createdBy: req.auth!.adminId });
-      notifyAs(req.auth?.adminId, movementCreated('TRANSFER', result.movement, req.body.statement));
       res.status(201).json({ success: true, data: result });
     }),
   );
@@ -427,7 +423,6 @@ export function createRoutes(deps: {
             movementCode: 'SETTLEMENT',
             createdBy: req.auth!.adminId,
           });
-          notifyAs(req.auth?.adminId, movementCreated('SETTLEMENT', result, req.body.description));
           return result;
         })(),
       });
@@ -447,7 +442,6 @@ export function createRoutes(deps: {
             movementCode: 'MULTI',
             createdBy: req.auth!.adminId,
           });
-          notifyAs(req.auth?.adminId, movementCreated('MULTI', result, req.body.description));
           return result;
         })(),
       });
@@ -467,7 +461,6 @@ export function createRoutes(deps: {
             type: ReceiptPaymentType.RECEIPT,
             createdBy: req.auth!.adminId,
           });
-          notifyAs(req.auth?.adminId, movementCreated('RECEIPT', result.movement, req.body.statement));
           return result;
         })(),
       });
@@ -487,7 +480,6 @@ export function createRoutes(deps: {
             type: ReceiptPaymentType.PAYMENT,
             createdBy: req.auth!.adminId,
           });
-          notifyAs(req.auth?.adminId, movementCreated('PAYMENT', result.movement, req.body.statement));
           return result;
         })(),
       });
@@ -503,7 +495,6 @@ export function createRoutes(deps: {
         success: true,
         data: await (async () => {
           const result = await deps.createExchange.execute({ ...req.body, createdBy: req.auth!.adminId });
-          notifyAs(req.auth?.adminId, movementCreated('EXCHANGE', result.movement, req.body.statement));
           return result;
         })(),
       });
@@ -761,11 +752,13 @@ export function createRoutes(deps: {
     res.write('retry: 3000\n\n');
     const send = (event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     send('ready', { adminId: req.auth!.adminId });
+    deps.logger.info({ adminId: req.auth!.adminId }, 'notifications stream opened');
     const unsubscribe = deps.notificationHub.subscribe(req.auth!.adminId, (n) => send('notification', n));
     const heartbeat = setInterval(() => res.write(': ping\n\n'), 20_000);
     req.on('close', () => {
       clearInterval(heartbeat);
       unsubscribe();
+      deps.logger.info({ adminId: req.auth!.adminId }, 'notifications stream closed');
     });
   });
   router.patch(
