@@ -1,3 +1,4 @@
+import type { ReceiptPaymentType } from '../../../domain/enums/ReceiptPaymentType.js';
 import type {
   Admin,
   Client,
@@ -65,6 +66,7 @@ export interface CurrencyRepository {
 }
 export interface MovementTypeRepository {
   findByCode(code: string): Promise<MovementType | null>;
+  findById(id: string): Promise<MovementType | null>;
   findPage(page: number, limit: number): Promise<Page<MovementType>>;
   update(
     id: string,
@@ -120,6 +122,7 @@ export interface MovementListItem {
   statement: string | null;
   createdBy: { id: string; fullName: string };
   entries: MovementListLine[];
+  reversedAt: string | null;
 }
 export interface MovementListSummary {
   count: number;
@@ -132,6 +135,16 @@ export interface MovementListPage {
   count: number;
   summary: MovementListSummary;
 }
+/** ما يتغيّر في رأس الحركة عند التعديل/العكس في مكانها. */
+export interface MovementContentsPatch {
+  movementTypeId?: string;
+  clientId?: string | null;
+  description?: string | null;
+  totalResult?: string;
+  updatedBy: string;
+  reversedAt?: Date | null;
+  reversedBy?: string | null;
+}
 export interface MovementRepository {
   create(input: Omit<Movement, 'id'> & { id?: string }): Promise<Movement>;
   findById(id: string): Promise<Movement | null>;
@@ -139,6 +152,10 @@ export interface MovementRepository {
   findListPage(filters: MovementListFilters): Promise<MovementListPage>;
   updateResult(id: string, result: string): Promise<void>;
   updateStatus(id: string, status: Movement['status'], updatedBy: string): Promise<void>;
+  /** تعديل رأس الحركة في مكانها (نفس الرقم). */
+  updateContents(id: string, patch: MovementContentsPatch): Promise<void>;
+  /** حذف قيود الحركة وصفوف تفاصيلها (كل الأنواع) تمهيداً لإعادة بنائها بنفس المعرّف. */
+  clearContents(id: string): Promise<void>;
 }
 export interface JournalFilters {
   dateFrom?: string;
@@ -175,6 +192,8 @@ export interface StatementPage extends JournalPage {
   period: SideTotals;
 }
 export interface JournalRepository {
+  /** قلب جهة كل قيد في الحركة (لنا ↔ علينا) في مكانه. */
+  flipSides(movementId: string): Promise<void>;
   createMany(entries: JournalEntry[]): Promise<void>;
   findByMovement(movementId: string): Promise<JournalEntry[]>;
   findPage(filters: JournalFilters): Promise<JournalPage>;
@@ -182,12 +201,20 @@ export interface JournalRepository {
 }
 export interface TransferRepository {
   create(input: Transfer): Promise<Transfer>;
+  findByMovement(movementId: string): Promise<Transfer | null>;
+  /** قلب الطرفين (من ↔ إلى) في مكانهما. */
+  swapSides(movementId: string): Promise<void>;
 }
 export interface ExchangeRepository {
   create(input: Exchange): Promise<Exchange>;
+  findByMovement(movementId: string): Promise<Exchange | null>;
+  /** قلب اتجاه التصريف: العملتان والمجاميع تتبادلان، السعر يُقلب (1 ÷ السعر) والنتيجة تُعكس. */
+  swapSides(movementId: string): Promise<void>;
 }
 export interface ReceiptPaymentRepository {
   create(input: ReceiptPayment): Promise<ReceiptPayment>;
+  findByMovement(movementId: string): Promise<ReceiptPayment | null>;
+  setType(movementId: string, type: ReceiptPaymentType): Promise<void>;
 }
 export interface NotificationRepository {
   create(input: Omit<Notification, 'id'>): Promise<Notification>;

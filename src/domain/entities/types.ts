@@ -90,6 +90,9 @@ export interface Movement {
   /** طوابع الإنشاء وآخر تعديل (ISO) للعرض في سجل الإنشاء والتعديل. */
   createdAt?: string;
   updatedAt?: string;
+  /** الحركة معكوسة في مكانها (أطرافها مقلوبة) — null = بالاتجاه الأصلي. */
+  reversedAt?: string | null;
+  reversedBy?: string | null;
 }
 export interface JournalEntry {
   id?: string;

@@ -107,7 +107,7 @@
 - **إعادة التفعيل**: `PATCH /admins/:id/activate` (`admin.manage`) و`PATCH /currencies/:id/activate` (`currency.manage`) بجانب `deactivate`؛ إلغاء أرشفة العميل عبر `PATCH /clients/:id/archive {archived:false}`.
 - `GET /movements` يقبل `currency_id` (فلتر بوجود قيد بتلك العملة) إضافةً إلى `client_id`؛ الواجهة تبني «دفتر اليومية» بصف واحد لكل حركة من هذه النقطة مع ملخص `GET /journal`.
 - `GET /reports/balance-sheet` يمرّر `includeSecret` لدور ADMIN فقط.
-- «تعديل الحركة» غير موجود كنقطة في الباك اند بقرار: التعديل = `POST /movements/:id/reverse` ثم إنشاء حركة جديدة من الواجهة؛ الحركات المرحّلة لا تُعدَّل في مكانها.
+- (مُلغى 2026-09-15 — انظر «العكس والتعديل في مكانهما» أدناه.)
 - الحركة تعيد `createdAt/updatedAt` (ISO) و`GET /movements/:id` يعيد `updatedBy` (الإداري الذي ألغى/عكس) لعرض «آخر تعديل بواسطة/الوقت».
 
 ## الدقة العشرية 10 منازل — معتمد 2026-09-14
@@ -123,6 +123,14 @@
 - ما يُضاف من الواجهة عملة عادية (`is_system = 0`) حرّة التعديل والتعطيل. لا حذف للعملات عبر الـ API.
 - البذور الوهمية (`demo-data`, `demo-notifications`) لا تعمل إلا مع `SEED_DEMO_DATA=true` حتى تبقى النسخ المسلَّمة نظيفة.
 - `resetBusinessData`: ترتيب الحذف القيود ← تفاصيل الحركات ← **الإشعارات** ← الحركات ← العملاء غير النظاميين ← المجموعات (الإشعارات تشير إلى الحركات بقيد RESTRICT).
+
+## العكس والتعديل في مكانهما + البثّ الفوري — معتمد 2026-09-15
+
+- **عكس الحركة في مكانها** (`POST /movements/:id/reverse`, `ReverseMovement`): لا تُنشأ حركة عكسية؛ تُقلب أطراف الحركة نفسها بنفس الرقم: قيود اليومية `flipSides` (لنا ↔ علينا)، الحوالة `swapSides` (من ↔ إلى بكل حقولهما)، التصريف (العملتان والمجاميع تتبادلان، السعر = 1 ÷ السعر، النتيجة تُعكس)، القبض ↔ الدفع (نوع الحركة و`movement_kind`)، `total_result` يُعكس. تبقى `POSTED` فتُحتسب بأثرها الجديد؛ `movements.reversed_at/reversed_by` (migration `20260915000200`) يوثّقان العكس، وعكسها مجدداً يعيدها ويمسح العلم. الرد `{ movement, reversed }`. «الإلغاء» يبقى الوسيلة لإزالة الأثر كلياً.
+- **تعديل الحركة في مكانها** (`PUT /movements/{transfers|settlements|multi|receipts|payments|exchanges}/:id`، يحتاج `movement.create` **و**`movement.reverse`): `Create*.replace(id, input, adminId)` يعيد التحقق والحساب نفسه (`prepare`) ثم `clearContents` (حذف القيود وصفوف التفاصيل) وإعادة الكتابة بنفس المعرّف وبتاريخ/وقت الحركة الأصلية، ويحدّث الرأس (`updateContents`: client/description/total_result/updated_by، ولسند القبض/الدفع النوع). لا يُسمح إلا لحركة `POSTED` ومن النوع نفسه (`MOVEMENT_TYPE_MISMATCH`). الرد `{ movement, detail?, changes[] }`.
+- **إشعار التعديل**: `describeMovement()` يصف الحركة بالعربية (أسماء لا معرّفات) قبل وبعد، و`diffDescriptions()` يعطي الفروق، والرسالة «تعديل حوالة #N: المبلغ: من 1000 إلى 1200؛ إلى حساب: من أحمد إلى باسل».
+- **بثّ فوري (SSE)**: `GET /notifications/stream` (مصادقة Bearer) يبقى مفتوحاً ويرسل `event: notification` لكل إشعار جديد للإداري الحالي لحظة إنشائه (`NotificationHub` في `infrastructure/realtime` عبر منفذ `NotificationPublisher` المحقون في `NotifyAdmins`)، مع نبضة كل 20 ث. الواجهة تعتمده بدل الاستطلاع (الاستطلاع كل 60 ث احتياط).
+- `newMovementId` انتقل مع `trimAmount/describeMovement/diffDescriptions/formatChanges` إلى `use-cases/movements/helpers.ts`؛ `loadEditableMovement` في `editing.ts`.
 ## الأمان وجودة الكود
 
 - كلمات المرور تخزن bcrypt hashes فقط، ولا يعاد أو يسجل `password_hash` أو password أو JWT.

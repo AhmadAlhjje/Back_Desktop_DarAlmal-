@@ -17,6 +17,8 @@ export const MovementMapper = {
       updatedBy: m.updated_by,
       createdAt: m.created_at.toISOString(),
       updatedAt: (m.updated_at ?? m.created_at).toISOString(),
+      reversedAt: m.reversed_at ? m.reversed_at.toISOString() : null,
+      reversedBy: m.reversed_by ?? null,
     };
   },
 };

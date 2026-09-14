@@ -1,5 +1,6 @@
 import type { AdminRepository, NotificationRepository } from '../../ports/repositories/types.js';
 import type { Logger } from '../../ports/services/Logger.js';
+import type { NotificationPublisher } from '../../ports/services/NotificationPublisher.js';
 
 export interface NotificationEvent {
   title: string;
@@ -19,12 +20,13 @@ export class NotifyAdmins {
     private admins: AdminRepository,
     private notifications: NotificationRepository,
     private logger: Logger,
+    private publisher?: NotificationPublisher,
   ) {}
   async execute(event: NotificationEvent): Promise<number> {
     try {
       const recipients = await this.admins.findAllActive();
       const actor = event.actorId ? await this.admins.findById(event.actorId) : null;
-      await Promise.all(
+      const created = await Promise.all(
         recipients.map((admin) =>
           this.notifications.create({
             adminId: admin.id,
@@ -38,6 +40,8 @@ export class NotifyAdmins {
           }),
         ),
       );
+      // بثّ فوري لكل مستلم متصل (الوصول لحظي بدل انتظار الاستطلاع).
+      for (const n of created) this.publisher?.publish(n);
       return recipients.length;
     } catch (error) {
       this.logger.error({ err: error, event }, 'notification dispatch failed');

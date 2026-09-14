@@ -18,16 +18,25 @@ import {
   JournalEntryModel,
   MovementModel,
   MovementTypeModel,
+  MultiMovementModel,
   NotificationModel,
   SettlementMovementModel,
   TransferMovementModel,
 } from '../models/index.js';
 import type { MovementStatus } from '../../../../domain/enums/MovementStatus.js';
+import type { ReceiptPaymentType } from '../../../../domain/enums/ReceiptPaymentType.js';
 import { EntrySide } from '../../../../domain/enums/EntrySide.js';
 import type { Logger } from '../../../../application/ports/services/Logger.js';
 import { mapDatabaseError } from '../DatabaseErrorMapper.js';
 import { AMOUNT_SCALE, ZERO_AMOUNT, isZeroAmount } from '../../../../domain/value-objects/Precision.js';
 
+const mapMovementType = (m: MovementTypeModel) => ({
+  id: m.id_movement_type,
+  code: m.movement_code,
+  name: m.movement_name,
+  description: m.description,
+  isActive: m.is_active,
+});
 export function createRepositories(transaction?: Transaction, logger?: Logger): Repositories {
   const options = transaction ? { transaction } : {};
   const journalInclude = (movementWhere: Record<string, unknown> = {}) => [
@@ -429,15 +438,11 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
     movementTypeRepository: {
       async findByCode(code) {
         const m = await MovementTypeModel.findOne({ where: { movement_code: code }, ...options });
-        return m
-          ? {
-              id: m.id_movement_type,
-              code: m.movement_code,
-              name: m.movement_name,
-              description: m.description,
-              isActive: m.is_active,
-            }
-          : null;
+        return m ? mapMovementType(m) : null;
+      },
+      async findById(id) {
+        const m = await MovementTypeModel.findByPk(id, options);
+        return m ? mapMovementType(m) : null;
       },
       async findPage(page, limit) {
         const r = await MovementTypeModel.findAndCountAll({
@@ -646,6 +651,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
               statement: detailStatement ?? entries.find((e) => e.description)?.description ?? null,
               createdBy: { id: creator.id_admin, fullName: creator.full_name },
               entries,
+              reversedAt: row.reversed_at ? row.reversed_at.toISOString() : null,
             };
           }),
           summary: {
@@ -662,8 +668,36 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       async updateStatus(id, status, updatedBy) {
         await MovementModel.update({ status, updated_by: updatedBy }, { where: { id_movement: id }, ...options });
       },
+      async updateContents(id, patch) {
+        await MovementModel.update(
+          {
+            ...(patch.movementTypeId !== undefined && { movement_type_id: patch.movementTypeId }),
+            ...(patch.clientId !== undefined && { client_id: patch.clientId }),
+            ...(patch.totalResult !== undefined && { total_result: patch.totalResult }),
+            ...(patch.reversedAt !== undefined && { reversed_at: patch.reversedAt }),
+            ...(patch.reversedBy !== undefined && { reversed_by: patch.reversedBy }),
+            updated_by: patch.updatedBy,
+            updated_at: new Date(),
+          },
+          { where: { id_movement: id }, ...options },
+        );
+      },
+      async clearContents(id) {
+        const where = { where: { movement_id: id }, ...options };
+        await JournalEntryModel.destroy(where);
+        await TransferMovementModel.destroy(where);
+        await ExchangeMovementModel.destroy(where);
+        await SettlementMovementModel.destroy(where);
+        await MultiMovementModel.destroy(where);
+      },
     },
     journalRepository: {
+      async flipSides(movementId) {
+        const rows = await JournalEntryModel.findAll({ where: { movement_id: movementId }, ...options });
+        for (const row of rows) {
+          await row.update({ amount_us: row.amount_them, amount_them: row.amount_us }, options);
+        }
+      },
       async createMany(entries) {
         await JournalEntryModel.bulkCreate(
           entries.map((e) => ({
@@ -804,6 +838,54 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         );
         return { ...i, id: m.id_transfer };
       },
+      async findByMovement(movementId) {
+        const m = await TransferMovementModel.findOne({ where: { movement_id: movementId }, ...options });
+        if (!m) return null;
+        return {
+          id: m.id_transfer,
+          movementId: m.movement_id,
+          statement: m.statement,
+          transferAmount: m.transfer_amount,
+          transferCurrencyId: m.transfer_currency_id,
+          fromClientId: m.first_client_id,
+          fromCurrencyId: m.first_currency_id,
+          fromExchangeRate: m.first_exchange_rate,
+          feeUs: m.fee_us,
+          feeUsPercentage: m.fee_us_percentage,
+          totalUs: m.total_us,
+          descriptionUs: m.description_us,
+          toClientId: m.second_client_id,
+          toCurrencyId: m.second_currency_id,
+          toExchangeRate: m.second_exchange_rate,
+          feeThem: m.fee_them,
+          feeThemPercentage: m.fee_them_percentage,
+          totalThem: m.total_them,
+          descriptionThem: m.description_them,
+        };
+      },
+      async swapSides(movementId) {
+        const m = await TransferMovementModel.findOne({ where: { movement_id: movementId }, ...options });
+        if (!m) return;
+        await m.update(
+          {
+            first_client_id: m.second_client_id,
+            second_client_id: m.first_client_id,
+            first_currency_id: m.second_currency_id,
+            second_currency_id: m.first_currency_id,
+            first_exchange_rate: m.second_exchange_rate,
+            second_exchange_rate: m.first_exchange_rate,
+            fee_us: m.fee_them,
+            fee_them: m.fee_us,
+            fee_us_percentage: m.fee_them_percentage,
+            fee_them_percentage: m.fee_us_percentage,
+            total_us: m.total_them,
+            total_them: m.total_us,
+            description_us: m.description_them,
+            description_them: m.description_us,
+          },
+          options,
+        );
+      },
     },
     exchangeRepository: {
       async create(i) {
@@ -824,6 +906,40 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         );
         return { ...i, id: m.id_exchange };
       },
+      async findByMovement(movementId) {
+        const m = await ExchangeMovementModel.findOne({ where: { movement_id: movementId }, ...options });
+        if (!m) return null;
+        return {
+          id: m.id_exchange,
+          movementId: m.movement_id,
+          clientId: m.first_client_id,
+          fromCurrencyId: m.first_currency_id,
+          fromAmount: m.total_them,
+          toCurrencyId: m.second_currency_id,
+          toAmount: m.total_us,
+          exchangeRate: m.exchange_rate,
+          totalUs: m.total_us,
+          totalThem: m.total_them,
+          profitLoss: m.result,
+          profitLossClientId: m.second_client_id,
+        };
+      },
+      async swapSides(movementId) {
+        const m = await ExchangeMovementModel.findOne({ where: { movement_id: movementId }, ...options });
+        if (!m) return;
+        const rate = new Decimal(m.exchange_rate);
+        await m.update(
+          {
+            first_currency_id: m.second_currency_id,
+            second_currency_id: m.first_currency_id,
+            total_us: m.total_them,
+            total_them: m.total_us,
+            exchange_rate: rate.isZero() ? m.exchange_rate : new Decimal(1).div(rate).toFixed(AMOUNT_SCALE),
+            result: new Decimal(m.result).negated().toFixed(AMOUNT_SCALE),
+          },
+          options,
+        );
+      },
     },
     receiptPaymentRepository: {
       async create(i) {
@@ -843,6 +959,22 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           options,
         );
         return { ...i, id: m.id_settlement };
+      },
+      async findByMovement(movementId) {
+        const m = await SettlementMovementModel.findOne({ where: { movement_id: movementId }, ...options });
+        if (!m) return null;
+        return {
+          id: m.id_settlement,
+          movementId: m.movement_id,
+          type: m.movement_kind as ReceiptPaymentType,
+          statement: m.statement,
+          clientId: m.first_client_id,
+          currencyId: m.first_currency_id,
+          amount: m.first_amount,
+        };
+      },
+      async setType(movementId, type) {
+        await SettlementMovementModel.update({ movement_kind: type }, { where: { movement_id: movementId }, ...options });
       },
     },
     systemRepository: {

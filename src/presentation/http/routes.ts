@@ -51,6 +51,8 @@ import { updateMovementTypeSchema } from './validators/movementTypeSchemas.js';
 import { uploadCurrencyIcon } from './middleware/currencyIconUpload.js';
 import { ApplicationError } from '../../application/errors/ApplicationError.js';
 import type { NotifyAdmins, NotificationEvent } from '../../application/use-cases/notifications/NotifyAdmins.js';
+import type { NotificationHub } from '../../infrastructure/realtime/NotificationHub.js';
+import { formatChanges, trimAmount, type MovementChange } from '../../application/use-cases/movements/helpers.js';
 import type { ResetSystemData } from '../../application/use-cases/system/ResetSystemData.js';
 import type { DeleteOwnAccount } from '../../application/use-cases/admins/DeleteOwnAccount.js';
 import { archiveClientSchema, secretClientSchema } from './validators/clientSchemas.js';
@@ -67,13 +69,18 @@ const MOVEMENT_LABELS: Record<string, string> = {
   PAYMENT: 'سند دفع',
   EXCHANGE: 'تصريف',
 };
-/** عرض المبلغ بلا أصفار زائدة (5.0000 → 5، 12.50 → 12.5). */
-const trimAmount = (value: string): string => (value.includes('.') ? value.replace(/\.?0+$/, '') : value) || '0';
 const movementCreated = (kind: string, m: Movement, description?: string | null): NotificationEvent => ({
   type: 'MOVEMENT',
   movementId: m.id,
   title: `${MOVEMENT_LABELS[kind] ?? kind} جديدة #${m.movementNo}`,
   message: `تم إنشاء ${MOVEMENT_LABELS[kind] ?? kind} رقم ${m.movementNo}${description ? ` — ${description}` : ''}. المحصلة: ${trimAmount(m.totalResult)} $`,
+});
+/** إشعار تعديل حركة في مكانها: «تعديل من كذا إلى كذا» لكل حقل تغيّر. */
+const movementEdited = (kind: string, m: Movement, changes: MovementChange[]): NotificationEvent => ({
+  type: 'MOVEMENT',
+  movementId: m.id,
+  title: `تعديل ${MOVEMENT_LABELS[kind] ?? kind} #${m.movementNo}`,
+  message: `تم تعديل ${MOVEMENT_LABELS[kind] ?? kind} رقم ${m.movementNo}: ${formatChanges(changes)}.`,
 });
 const asyncRoute =
   (handler: RequestHandler): RequestHandler =>
@@ -103,6 +110,7 @@ export function createRoutes(deps: {
   getNotifications: GetNotifications;
   markNotificationRead: MarkNotificationRead;
   notifyAdmins: NotifyAdmins;
+  notificationHub: NotificationHub;
   resetSystemData: ResetSystemData;
   deleteOwnAccount: DeleteOwnAccount;
   tokens: TokenService;
@@ -501,6 +509,84 @@ export function createRoutes(deps: {
       });
     }),
   );
+  // ── تعديل الحركات في مكانها (نفس الرقم) — يحتاج صلاحيتَي الإنشاء والعكس ──
+  const canEdit = [authenticate(deps.tokens), authorize('movement.create'), authorize('movement.reverse')];
+  router.put(
+    '/movements/transfers/:id',
+    ...canEdit,
+    validate(createTransferSchema),
+    asyncRoute(async (req, res) => {
+      const result = await deps.createTransfer.replace(req.params.id, { ...req.body, createdBy: req.auth!.adminId }, req.auth!.adminId);
+      notifyAs(req.auth?.adminId, movementEdited('TRANSFER', result.movement, result.changes));
+      res.json({ success: true, data: result });
+    }),
+  );
+  router.put(
+    '/movements/settlements/:id',
+    ...canEdit,
+    validate(createJournalMovementSchema),
+    asyncRoute(async (req, res) => {
+      const result = await deps.createJournalMovement.replace(
+        req.params.id,
+        { ...req.body, movementCode: 'SETTLEMENT', createdBy: req.auth!.adminId },
+        req.auth!.adminId,
+      );
+      notifyAs(req.auth?.adminId, movementEdited('SETTLEMENT', result.movement, result.changes));
+      res.json({ success: true, data: result });
+    }),
+  );
+  router.put(
+    '/movements/multi/:id',
+    ...canEdit,
+    validate(createJournalMovementSchema),
+    asyncRoute(async (req, res) => {
+      const result = await deps.createJournalMovement.replace(
+        req.params.id,
+        { ...req.body, movementCode: 'MULTI', createdBy: req.auth!.adminId },
+        req.auth!.adminId,
+      );
+      notifyAs(req.auth?.adminId, movementEdited('MULTI', result.movement, result.changes));
+      res.json({ success: true, data: result });
+    }),
+  );
+  router.put(
+    '/movements/receipts/:id',
+    ...canEdit,
+    validate(receiptPaymentSchema),
+    asyncRoute(async (req, res) => {
+      const result = await deps.createReceiptPayment.replace(
+        req.params.id,
+        { ...req.body, type: ReceiptPaymentType.RECEIPT, createdBy: req.auth!.adminId },
+        req.auth!.adminId,
+      );
+      notifyAs(req.auth?.adminId, movementEdited('RECEIPT', result.movement, result.changes));
+      res.json({ success: true, data: result });
+    }),
+  );
+  router.put(
+    '/movements/payments/:id',
+    ...canEdit,
+    validate(receiptPaymentSchema),
+    asyncRoute(async (req, res) => {
+      const result = await deps.createReceiptPayment.replace(
+        req.params.id,
+        { ...req.body, type: ReceiptPaymentType.PAYMENT, createdBy: req.auth!.adminId },
+        req.auth!.adminId,
+      );
+      notifyAs(req.auth?.adminId, movementEdited('PAYMENT', result.movement, result.changes));
+      res.json({ success: true, data: result });
+    }),
+  );
+  router.put(
+    '/movements/exchanges/:id',
+    ...canEdit,
+    validate(exchangeSchema),
+    asyncRoute(async (req, res) => {
+      const result = await deps.createExchange.replace(req.params.id, { ...req.body, createdBy: req.auth!.adminId }, req.auth!.adminId);
+      notifyAs(req.auth?.adminId, movementEdited('EXCHANGE', result.movement, result.changes));
+      res.json({ success: true, data: result });
+    }),
+  );
   router.get(
     '/journal',
     authenticate(deps.tokens),
@@ -639,11 +725,13 @@ export function createRoutes(deps: {
       const result = await deps.reverseMovement.execute(req.params.id, req.auth!.adminId);
       notifyAs(req.auth?.adminId, {
         type: 'ALERT',
-        movementId: result.reverseMovement.id,
-        title: `عكس حركة #${result.reverseMovement.movementNo}`,
-        message: `تم إنشاء حركة عكسية رقم ${result.reverseMovement.movementNo} للحركة الأصلية.`,
+        movementId: result.movement.id,
+        title: `${result.reversed ? 'عكس' : 'إعادة'} حركة #${result.movement.movementNo}`,
+        message: result.reversed
+          ? `تم عكس الحركة رقم ${result.movement.movementNo} في مكانها (قُلبت أطرافها). المحصلة: ${trimAmount(result.movement.totalResult)} $`
+          : `أُعيدت الحركة رقم ${result.movement.movementNo} إلى اتجاهها الأصلي. المحصلة: ${trimAmount(result.movement.totalResult)} $`,
       });
-      res.status(201).json({ success: true, data: result });
+      res.json({ success: true, data: result });
     }),
   );
   router.get(
@@ -662,6 +750,24 @@ export function createRoutes(deps: {
       res.json({ success: true, data: await deps.getNotifications.unreadCount(req.auth!.adminId) });
     }),
   );
+  // بثّ فوري (SSE): كل إشعار جديد للإداري الحالي يصل لحظة إنشائه؛ نبضة كل 20 ث تبقي الاتصال حياً.
+  router.get('/notifications/stream', authenticate(deps.tokens), (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    res.write('retry: 3000\n\n');
+    const send = (event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    send('ready', { adminId: req.auth!.adminId });
+    const unsubscribe = deps.notificationHub.subscribe(req.auth!.adminId, (n) => send('notification', n));
+    const heartbeat = setInterval(() => res.write(': ping\n\n'), 20_000);
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+  });
   router.patch(
     '/notifications/read-all',
     authenticate(deps.tokens),

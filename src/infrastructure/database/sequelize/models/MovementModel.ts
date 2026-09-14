@@ -11,6 +11,8 @@ export class MovementModel extends Model {
   declare status: string;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare created_by: string;
   @Column(DataType.BIGINT.UNSIGNED) declare updated_by: string | null;
+  @Column(DataType.DATE) declare reversed_at: Date | null;
+  @Column(DataType.BIGINT.UNSIGNED) declare reversed_by: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }

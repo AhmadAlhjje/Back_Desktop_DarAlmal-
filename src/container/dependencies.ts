@@ -32,6 +32,7 @@ import { PinoLogger } from '../infrastructure/logging/PinoLogger.js';
 import { NotifyAdmins } from '../application/use-cases/notifications/NotifyAdmins.js';
 import { ResetSystemData } from '../application/use-cases/system/ResetSystemData.js';
 import { DeleteOwnAccount } from '../application/use-cases/admins/DeleteOwnAccount.js';
+import { NotificationHub } from '../infrastructure/realtime/NotificationHub.js';
 const logger = new PinoLogger(env.LOG_LEVEL);
 const repositories = createRepositories(undefined, logger);
 const hasher = new BcryptPasswordHasher(env.BCRYPT_ROUNDS);
@@ -39,6 +40,7 @@ export const tokens = new JwtTokenService(env.JWT_SECRET, env.JWT_EXPIRES_IN as 
 const uow = new SequelizeUnitOfWork(sequelize, logger);
 const clock = new SystemClock();
 const reportsRepository = new SequelizeReportsRepository(sequelize);
+const notificationHub = new NotificationHub();
 export const dependencies = {
   logger,
   tokens,
@@ -68,7 +70,8 @@ export const dependencies = {
   reverseMovement: new ReverseMovement(uow, clock),
   getNotifications: new GetNotifications(repositories.notificationRepository),
   markNotificationRead: new MarkNotificationRead(repositories.notificationRepository),
-  notifyAdmins: new NotifyAdmins(repositories.adminRepository, repositories.notificationRepository, logger),
+  notifyAdmins: new NotifyAdmins(repositories.adminRepository, repositories.notificationRepository, logger, notificationHub),
+  notificationHub,
   resetSystemData: new ResetSystemData(uow, repositories.adminRepository, hasher),
   deleteOwnAccount: new DeleteOwnAccount(repositories.adminRepository, hasher),
 };
