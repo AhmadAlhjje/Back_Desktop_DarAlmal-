@@ -65,6 +65,8 @@ export interface Currency {
   exchangeRate: string;
   exchangeType: 'FROM_USD_MULTIPLY' | 'TO_USD_DIVIDE';
   isActive: boolean;
+  /** عملة أساسية (دولار/ليرة سوري/يورو/ليرة تركي): يُعدَّل سعر صرفها فقط ولا تُعطَّل. */
+  isSystem: boolean;
 }
 export interface MovementType {
   id: string;

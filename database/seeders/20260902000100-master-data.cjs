@@ -3,20 +3,25 @@
 module.exports = {
   async up(queryInterface) {
     const now = new Date();
+    // العملات الأساسية الأربع (قرار المستخدم 2026-09-15): ثابتة، يُعدَّل سعر صرفها فقط.
     await queryInterface.bulkInsert(
       'currencies',
       [
-        ['US Dollar', 'USD', '$', 2],
-        ['Syrian Pound', 'SYP', 'ل.س', 2],
-        ['Euro', 'EUR', '€', 2],
-        ['Turkish Lira', 'TRY', '₺', 2],
-        ['Saudi Riyal', 'SAR', 'ر.س', 2],
-      ].map(([currency_name, currency_code, currency_symbol, decimal_places]) => ({
+        ['دولار', 'USD', '$', 'US', 100000],
+        ['ليرة سوري', 'SYP', 'ل.س', 'SY', 99999],
+        ['يورو', 'EUR', '€', 'EU', 99998],
+        ['ليرة تركي', 'TRY', '₺', 'TR', 99997],
+      ].map(([currency_name, currency_code, currency_symbol, text_icon, importance]) => ({
         currency_name,
         currency_code,
         currency_symbol,
-        decimal_places,
+        text_icon,
+        importance,
+        decimal_places: 2,
+        exchange_rate: '1.0000000000',
+        exchange_type: 'FROM_USD_MULTIPLY',
         is_active: true,
+        is_system: true,
         created_at: now,
       })),
     );
@@ -36,6 +41,6 @@ module.exports = {
     await queryInterface.bulkDelete('movement_types', {
       movement_code: ['TRANSFER', 'SETTLEMENT', 'MULTI', 'RECEIPT', 'PAYMENT', 'EXCHANGE'],
     });
-    await queryInterface.bulkDelete('currencies', { currency_code: ['USD', 'SYP', 'EUR', 'TRY', 'SAR'] });
+    await queryInterface.bulkDelete('currencies', { currency_code: ['USD', 'SYP', 'EUR', 'TRY'] });
   },
 };

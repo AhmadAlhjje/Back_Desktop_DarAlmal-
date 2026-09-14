@@ -400,6 +400,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             exchange_rate: i.exchangeRate,
             exchange_type: i.exchangeType,
             is_active: i.isActive,
+            // العملات الأساسية تُبذر فقط؛ ما يُضاف من الواجهة عملة عادية.
+            is_system: false,
           },
           options,
         );
@@ -845,7 +847,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
     },
     systemRepository: {
       async resetBusinessData() {
-        // الترتيب يحترم قيود RESTRICT: القيود ← تفاصيل الحركات ← الحركات ← الإشعارات ← العملاء غير النظاميين ← المجموعات.
+        // الترتيب يحترم قيود RESTRICT: القيود ← تفاصيل الحركات ← الإشعارات (تشير إلى الحركات) ← الحركات
+        // ← العملاء غير النظاميين ← المجموعات.
         const del = async (sql: string): Promise<number> => {
           const [, meta] = await sequelize.query(sql, options);
           const affected = (meta as { affectedRows?: number } | number | undefined) ?? 0;
@@ -856,8 +859,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         await del('DELETE FROM settlement_movements');
         await del('DELETE FROM multi_movements');
         await del('DELETE FROM exchange_movements');
-        const movements = await del('DELETE FROM movements');
         const notifications = await del('DELETE FROM notifications');
+        const movements = await del('DELETE FROM movements');
         const clients = await del('DELETE FROM clients WHERE is_system = 0');
         const clientGroups = await del('DELETE FROM client_groups');
         await del('UPDATE clients SET archived_at = NULL, last_rollover_at = NULL WHERE is_system = 1');

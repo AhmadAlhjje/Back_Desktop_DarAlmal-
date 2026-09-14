@@ -14,4 +14,5 @@ export class CurrencyModel extends Model {
   @Column({ type: DataType.ENUM('FROM_USD_MULTIPLY', 'TO_USD_DIVIDE'), allowNull: false })
   declare exchange_type: 'FROM_USD_MULTIPLY' | 'TO_USD_DIVIDE';
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: true }) declare is_active: boolean;
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false }) declare is_system: boolean;
 }

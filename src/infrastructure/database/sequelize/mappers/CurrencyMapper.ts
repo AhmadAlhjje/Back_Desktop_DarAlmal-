@@ -14,6 +14,7 @@ export const CurrencyMapper = {
       exchangeRate: m.exchange_rate,
       exchangeType: m.exchange_type,
       isActive: m.is_active,
+      isSystem: m.is_system,
     };
   },
 };

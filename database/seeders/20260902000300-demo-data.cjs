@@ -12,6 +12,11 @@
 
 module.exports = {
   async up(queryInterface) {
+    // بيانات وهمية للتجربة فقط: لا تُبذر إلا صراحةً (SEED_DEMO_DATA=true) حتى تبقى النسخ المسلَّمة نظيفة.
+    if (process.env.SEED_DEMO_DATA !== 'true') {
+      console.log('Demo seed skipped (set SEED_DEMO_DATA=true to load sample data).');
+      return;
+    }
     const tables = await queryInterface.showAllTables();
     if (!tables.includes('transfer_details')) {
       console.log(
