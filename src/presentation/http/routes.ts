@@ -6,7 +6,7 @@ import type { CreateJournalMovement } from '../../application/use-cases/movement
 import type { TokenService } from '../../application/ports/services/TokenService.js';
 import { validate, validateQuery } from './middleware/validate.js';
 import { authenticate, authorize } from './middleware/authenticate.js';
-import { loginSchema } from './validators/authSchemas.js';
+import { changePasswordSchema, loginSchema } from './validators/authSchemas.js';
 import { createClientSchema } from './validators/clientSchemas.js';
 import { createTransferSchema } from './validators/transferSchemas.js';
 import { createJournalMovementSchema } from './validators/journalMovementSchemas.js';
@@ -55,6 +55,7 @@ import type { NotificationHub } from '../../infrastructure/realtime/Notification
 import type { Logger } from '../../application/ports/services/Logger.js';
 import { formatChanges, trimAmount, type MovementChange } from '../../application/use-cases/movements/helpers.js';
 import type { ResetSystemData } from '../../application/use-cases/system/ResetSystemData.js';
+import type { ChangeOwnPassword } from '../../application/use-cases/admins/ChangeOwnPassword.js';
 import type { DeleteOwnAccount } from '../../application/use-cases/admins/DeleteOwnAccount.js';
 import { archiveClientSchema, secretClientSchema } from './validators/clientSchemas.js';
 import { clientsQuerySchema } from './validators/querySchemas.js';
@@ -110,6 +111,7 @@ export function createRoutes(deps: {
   logger: Logger;
   resetSystemData: ResetSystemData;
   deleteOwnAccount: DeleteOwnAccount;
+  changeOwnPassword: ChangeOwnPassword;
   tokens: TokenService;
 }) {
   const router = Router();
@@ -788,6 +790,20 @@ export function createRoutes(deps: {
         message: 'تم تصفير كل البيانات التجارية (الحركات، القيود، العملاء، المجموعات).',
       });
       res.json({ success: true, data: summary });
+    }),
+  );
+  router.patch(
+    '/auth/me/password',
+    authenticate(deps.tokens),
+    validate(changePasswordSchema),
+    asyncRoute(async (req, res) => {
+      const result = await deps.changeOwnPassword.execute(req.auth!.adminId, req.body.currentPassword, req.body.newPassword);
+      notifyAs(req.auth?.adminId, {
+        type: 'ADMIN',
+        title: 'تغيير كلمة المرور',
+        message: 'تم تغيير كلمة مرور الحساب بنجاح.',
+      });
+      res.json({ success: true, data: result });
     }),
   );
   router.delete(

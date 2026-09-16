@@ -31,6 +31,7 @@ import { ManageMovementTypes } from '../application/use-cases/movement-types/Man
 import { PinoLogger } from '../infrastructure/logging/PinoLogger.js';
 import { NotifyAdmins } from '../application/use-cases/notifications/NotifyAdmins.js';
 import { ResetSystemData } from '../application/use-cases/system/ResetSystemData.js';
+import { ChangeOwnPassword } from '../application/use-cases/admins/ChangeOwnPassword.js';
 import { DeleteOwnAccount } from '../application/use-cases/admins/DeleteOwnAccount.js';
 import { NotificationHub } from '../infrastructure/realtime/NotificationHub.js';
 const logger = new PinoLogger(env.LOG_LEVEL);
@@ -74,4 +75,5 @@ export const dependencies = {
   notificationHub,
   resetSystemData: new ResetSystemData(uow, repositories.adminRepository, hasher),
   deleteOwnAccount: new DeleteOwnAccount(repositories.adminRepository, hasher),
+  changeOwnPassword: new ChangeOwnPassword(repositories.adminRepository, hasher),
 };
