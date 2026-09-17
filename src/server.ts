@@ -4,7 +4,7 @@ import { sequelize } from './infrastructure/database/sequelize/sequelize.js';
 import { dependencies } from './container/dependencies.js';
 async function start() {
   await sequelize.authenticate();
-  app.listen(env.PORT, () => console.info(`Mizan API listening on port ${env.PORT}`));
+  app.listen(env.PORT, () => console.info(`Wafeer API listening on port ${env.PORT}`));
 }
 start().catch((error) => {
   dependencies.logger.error(

@@ -1,4 +1,4 @@
-import { fn, col, literal, Op, type Transaction, type WhereOptions } from 'sequelize';
+import { fn, col, literal, Op, QueryTypes, type Transaction, type WhereOptions } from 'sequelize';
 import { sequelize } from '../sequelize.js';
 
 /** تهريب قيمة نصية للاستخدام داخل `literal` (يُنتج نصاً مقتبساً آمناً). */
@@ -475,6 +475,15 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       },
     },
     movementRepository: {
+      async nextNumber() {
+        // قفل أحدث صف داخل المعاملة: يمنع منح الرقم نفسه لعمليتين متزامنتين.
+        const rows = (await sequelize.query('SELECT id_movement AS last FROM movements ORDER BY id_movement DESC LIMIT 1 FOR UPDATE', {
+          type: QueryTypes.SELECT,
+          ...options,
+        })) as Array<{ last: string | number | null }>;
+        const last = rows[0]?.last ?? 0;
+        return (BigInt(last) + 1n).toString();
+      },
       async create(input) {
         const row = await MovementModel.create(
           {

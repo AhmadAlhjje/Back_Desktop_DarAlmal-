@@ -8,7 +8,7 @@ describe('CreateJournalMovement', () => {
       movementTypeRepository: { findByCode: vi.fn().mockResolvedValue({ id: '3', isActive: true }) },
       clientRepository: { findById: vi.fn().mockResolvedValue({ isActive: true }) },
       currencyRepository: { findById: vi.fn().mockResolvedValue({ isActive: true }) },
-      movementRepository: { create: vi.fn(async (x) => ({ id: x.id, ...x })) },
+      movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'), create: vi.fn(async (x) => ({ id: x.id, ...x })) },
       journalRepository: { createMany },
     };
     const uow: any = { execute: vi.fn((work) => work(repos)) };

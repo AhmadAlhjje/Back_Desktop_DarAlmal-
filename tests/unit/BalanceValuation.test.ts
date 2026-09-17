@@ -29,6 +29,11 @@ describe('BalanceValuationService', () => {
   it('rejects non-positive rates safely', () => {
     expect(svc.toUsd('100', '0', 'FROM_USD_MULTIPLY')).toBe('0.0000000000');
   });
+  // قرار المستخدم 2026-09-17: سعر الدولار نفسه قابل للتعديل، والتقييم يستعمله كأي عملة أخرى.
+  it('values USD by its own stored rate, never assuming 1', () => {
+    expect(svc.toUsd('100', '2', 'FROM_USD_MULTIPLY')).toBe('50.0000000000');
+    expect(svc.toUsd('100', '1.25', 'TO_USD_DIVIDE')).toBe('125.0000000000');
+  });
   it('net = us - them with 4 decimals', () => {
     expect(svc.net('1010', '1002')).toBe('8.0000000000');
     expect(svc.net('0', '3200')).toBe('-3200.0000000000');
@@ -51,6 +56,11 @@ describe('GetBalanceSheet', () => {
     expect(b.totalThem).toBe('1002.0000000000');
     expect(b.balanceThem).toBe('902.0000000000');
     expect(r.totals.difference).toBe('108.0000000000'); // 1010 - 902
+  });
+  it('a USD rate other than 1 changes the valued totals', async () => {
+    const usdAtTwo: BalanceAggregateRow[] = [row({ clientId: '1', clientName: 'A', exchangeRate: '2', totalUs: '1000', totalThem: '0' })];
+    const r = await new GetBalanceSheet({ allBalances: async () => usdAtTwo } as never).execute({ mode: 'valued', detail: 'simple' });
+    expect(r.rows[0].totalUs).toBe('500.0000000000'); // 1000 ÷ 2 وليس 1000
   });
   it('currency/full keeps one row per currency including balanced ones', async () => {
     const r = await new GetBalanceSheet(reports).execute({ mode: 'currency', detail: 'full' });

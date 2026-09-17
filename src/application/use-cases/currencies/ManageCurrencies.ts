@@ -3,9 +3,6 @@ import type { Currency } from '../../../domain/entities/Currency.js';
 import type { CurrencyRepository } from '../../ports/repositories/CurrencyRepository.js';
 import { ApplicationError } from '../../errors/ApplicationError.js';
 
-/** العملة الأساس للتقييم؛ سعرها 1 دائماً ولا يُعدَّل. */
-export const BASE_CURRENCY_CODE = 'USD';
-
 /** ما يجوز تعديله في عملة أساسية (قرار المستخدم 2026-09-15): سعر الصرف واتجاهه فقط. */
 const SYSTEM_EDITABLE: ReadonlySet<keyof Currency> = new Set<keyof Currency>(['exchangeRate', 'exchangeType']);
 
@@ -48,11 +45,10 @@ export class ManageCurrencies {
         ? new Decimal(String(value)).eq(current.exchangeRate)
         : value === current[key];
       if (unchanged) continue;
+      // سعر الصرف قابل للتعديل في كل العملات الأساسية بما فيها الدولار (قرار المستخدم 2026-09-17):
+      // التقييم يستعمل سعر كل عملة كما هو مخزّن، فلا افتراض بأن الدولار = 1.
       if (!SYSTEM_EDITABLE.has(key)) {
         throw new ApplicationError('SYSTEM_CURRENCY_PROTECTED', `System currencies only allow changing the exchange rate (field: ${key})`, 409);
-      }
-      if (current.code === BASE_CURRENCY_CODE) {
-        throw new ApplicationError('SYSTEM_CURRENCY_PROTECTED', 'The base currency (USD) rate is always 1', 409);
       }
     }
   }

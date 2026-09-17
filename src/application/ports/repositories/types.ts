@@ -146,6 +146,8 @@ export interface MovementContentsPatch {
   reversedBy?: string | null;
 }
 export interface MovementRepository {
+  /** الرقم التسلسلي التالي للحركة (1، 2، 3…) — يُقرأ داخل المعاملة مع قفل لمنع التكرار. */
+  nextNumber(): Promise<string>;
   create(input: Omit<Movement, 'id'> & { id?: string }): Promise<Movement>;
   findById(id: string): Promise<Movement | null>;
   findDetails(id: string): Promise<MovementDetails | null>;

@@ -6,7 +6,7 @@ import { ApplicationError } from '../../errors/ApplicationError.js';
 import type { Clock } from '../../ports/services/Clock.js';
 import type { Repositories } from '../../ports/repositories/types.js';
 import type { UnitOfWork } from '../../ports/services/UnitOfWork.js';
-import { describeMovement, diffDescriptions, movementTimestamp, newMovementId } from './helpers.js';
+import { describeMovement, diffDescriptions, movementTimestamp } from './helpers.js';
 import { loadEditableMovement } from './editing.js';
 export interface CreateReceiptPaymentInput {
   type: ReceiptPaymentType;
@@ -25,7 +25,7 @@ export class CreateReceiptPayment {
     return this.uow.execute(async (r) => {
       const p = await this.prepare(r, input);
       const { date, time } = movementTimestamp(this.clock);
-      const id = newMovementId();
+      const id = await r.movementRepository.nextNumber();
       const movement = await r.movementRepository.create({
         id,
         movementNo: id,

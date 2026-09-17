@@ -1,22 +1,7 @@
-import { randomBytes } from 'node:crypto';
 import type { Clock } from '../../ports/services/Clock.js';
 import type { Repositories } from '../../ports/repositories/types.js';
 import { EntrySide } from '../../../domain/enums/EntrySide.js';
 
-/**
- * معرّف الحركة/رقمها: 63 بت مرتّب زمنياً (41 بت ميلي ثانية + 22 بت عشوائي).
- * الجزء الزمني يجعل الترتيب «الأحدث أولاً» بالمعرّف مستقراً حتى للحركات المنشأة في الثانية نفسها
- * (مثل عكس حركة ثم إنشاء بديلها عند التعديل)، والجزء العشوائي يمنع التخمين والتصادم.
- */
-let lastMovementId = 0n;
-export function newMovementId(now: number = Date.now()): string {
-  const random = BigInt(`0x${randomBytes(4).toString('hex')}`) & 0x3fffffn;
-  let value = ((BigInt(now) & 0x1ffffffffffn) << 22n) | random;
-  // ضمان التفرّد والتزايد داخل العملية نفسها حتى عند توليد عدة معرّفات في الميلي ثانية نفسها.
-  if (value <= lastMovementId) value = lastMovementId + 1n;
-  lastMovementId = value;
-  return (value || 1n).toString();
-}
 export function movementTimestamp(clock: Clock) {
   const iso = clock.now().toISOString();
   return { date: iso.slice(0, 10), time: iso.slice(11, 19) };

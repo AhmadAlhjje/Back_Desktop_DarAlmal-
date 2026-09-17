@@ -12,7 +12,7 @@ function repos() {
       movementTypeRepository: { findByCode: vi.fn().mockResolvedValue({ id: '1', isActive: true }) },
       clientRepository: { findById: vi.fn().mockResolvedValue({ isActive: true }) },
       currencyRepository: { findById: vi.fn().mockResolvedValue({ isActive: true }) },
-      movementRepository: { create: vi.fn(async (x) => ({ ...x, id: x.id })) },
+      movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'), create: vi.fn(async (x) => ({ ...x, id: x.id })) },
       receiptPaymentRepository: { create: vi.fn(async (x) => x) },
       exchangeRepository: { create: vi.fn(async (x) => x) },
       journalRepository: { createMany: journal },

@@ -49,10 +49,12 @@ describe('ManageCurrencies — system currencies', () => {
     expect(repo.update).toHaveBeenCalled();
   });
 
-  it('keeps the base currency (USD) rate locked at 1', async () => {
-    const { m } = make(system({ id: '1', code: 'USD', name: 'دولار', exchangeRate: '1.0000000000' }));
-    await expect(m.update('1', { exchangeRate: '2' })).rejects.toMatchObject({ code: 'SYSTEM_CURRENCY_PROTECTED' });
-    await expect(m.update('1', { exchangeRate: '1.00' })).resolves.toBeTruthy();
+  it('allows editing the USD rate too (it is valued by its own rate, not assumed to be 1)', async () => {
+    const { repo, m } = make(system({ id: '1', code: 'USD', name: 'دولار', exchangeRate: '1.0000000000' }));
+    await expect(m.update('1', { exchangeRate: '1.02' })).resolves.toBeTruthy();
+    expect(repo.update).toHaveBeenCalledWith('1', { exchangeRate: '1.02' });
+    // الاسم والرمز يبقيان مقفلين حتى في الدولار.
+    await expect(m.update('1', { name: 'دولار أمريكي' })).rejects.toMatchObject({ code: 'SYSTEM_CURRENCY_PROTECTED' });
   });
 
   it('never deactivates a system currency, and created currencies are never system', async () => {

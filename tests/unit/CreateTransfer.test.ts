@@ -8,7 +8,7 @@ describe('CreateTransfer', () => {
       movementTypeRepository: { findByCode: vi.fn().mockResolvedValue({ id: '1', isActive: true }) },
       clientRepository: { findById: vi.fn().mockResolvedValue({ isActive: true }) },
       currencyRepository: { findById: vi.fn().mockResolvedValue({ isActive: true }) },
-      movementRepository: { create: movementCreate },
+      movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'), create: movementCreate },
       transferRepository: { create: vi.fn().mockRejectedValue(new Error('detail failed')) },
       journalRepository: { createMany: journalCreate },
     };
@@ -37,7 +37,7 @@ describe('CreateTransfer', () => {
       movementTypeRepository: { findByCode: vi.fn().mockResolvedValue({ id: '1', isActive: true }) },
       clientRepository: { findById: vi.fn().mockResolvedValue({ isActive: true }) },
       currencyRepository: { findById: vi.fn().mockResolvedValue({ isActive: true }) },
-      movementRepository: { create: vi.fn(async (x) => ({ ...x })) },
+      movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'), create: vi.fn(async (x) => ({ ...x })) },
       transferRepository: { create: vi.fn(async (x) => x) },
       journalRepository: { createMany: journalCreate },
     };

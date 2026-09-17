@@ -25,7 +25,7 @@ const clock = { now: () => new Date('2026-01-02T12:00:00Z') };
 
 function reverseRepos(typeCode: string, over: Record<string, unknown> = {}) {
   const repos: any = {
-    movementRepository: {
+    movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'),
       findById: vi.fn().mockResolvedValue(original),
       updateContents: vi.fn(),
     },
@@ -45,7 +45,7 @@ function reverseRepos(typeCode: string, over: Record<string, unknown> = {}) {
 describe('movement lifecycle', () => {
   it('cancels by status without deleting financial records', async () => {
     const updateStatus = vi.fn();
-    const repos: any = { movementRepository: { findById: vi.fn().mockResolvedValue(original), updateStatus } };
+    const repos: any = { movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'), findById: vi.fn().mockResolvedValue(original), updateStatus } };
     const result = await new CancelMovement({ execute: (work: any) => work(repos) }).execute('10', '9');
     expect(updateStatus).toHaveBeenCalledWith('10', MovementStatus.CANCELLED, '9');
     expect(result.status).toBe(MovementStatus.CANCELLED);
@@ -77,7 +77,7 @@ describe('movement lifecycle', () => {
 
   it('reversing an already reversed movement restores it (flag cleared)', async () => {
     const repos = reverseRepos('EXCHANGE', {
-      movementRepository: {
+      movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'),
         findById: vi.fn().mockResolvedValue({ ...original, reversedAt: '2026-01-01T00:00:00.000Z' }),
         updateContents: vi.fn(),
       },
@@ -90,7 +90,7 @@ describe('movement lifecycle', () => {
 
   it('refuses to reverse a cancelled movement', async () => {
     const repos = reverseRepos('TRANSFER', {
-      movementRepository: { findById: vi.fn().mockResolvedValue({ ...original, status: MovementStatus.CANCELLED }), updateContents: vi.fn() },
+      movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'), findById: vi.fn().mockResolvedValue({ ...original, status: MovementStatus.CANCELLED }), updateContents: vi.fn() },
     });
     await expect(new ReverseMovement({ execute: (work: any) => work(repos) }, clock).execute('10', '9')).rejects.toMatchObject({
       code: 'MOVEMENT_NOT_POSTED',

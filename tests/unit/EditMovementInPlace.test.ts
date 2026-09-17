@@ -30,7 +30,7 @@ function transferRepos(stored: any) {
     },
     clientRepository: { findById: vi.fn(async (id: string) => ({ id, fullName: names[id], isActive: true })) },
     currencyRepository: { findById: vi.fn(async (id: string) => ({ id, name: currencies[id], isActive: true })) },
-    movementRepository: {
+    movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'),
       findById: vi.fn(async () => movement),
       create: vi.fn(),
       clearContents: vi.fn(),
@@ -131,7 +131,7 @@ describe('edit movement in place', () => {
       },
       clientRepository: { findById: vi.fn(async (id: string) => ({ id, fullName: names[id], isActive: true })) },
       currencyRepository: { findById: vi.fn(async (id: string) => ({ id, name: currencies[id], isActive: true })) },
-      movementRepository: {
+      movementRepository: { nextNumber: vi.fn().mockResolvedValue('7'),
         findById: vi.fn(async () => movement),
         clearContents: vi.fn(),
         updateContents: vi.fn(async (_id: string, patch: any) => Object.assign(movement, patch)),
