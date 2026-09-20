@@ -90,6 +90,7 @@ export const dependencies = {
   licenseMonitor,
   tenantScope,
   offices,
+  admins: repositories.adminRepository,
   platformStats,
   platformApiKey: env.PLATFORM_API_KEY,
   manageOffices: new ManageOffices(offices, platformStats, uow, tenantScope, hasher),

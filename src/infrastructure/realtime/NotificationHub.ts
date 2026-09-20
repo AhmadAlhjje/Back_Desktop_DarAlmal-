@@ -24,6 +24,17 @@ export class NotificationHub implements NotificationPublisher {
     return () => this.emitter.off(channel, listener);
   }
 
+  /** حالة حساب إداري (تعطيل/تفعيل) لأجهزته المتصلة — يصل القفل/رفعه فوراً. */
+  publishAccount(adminId: string, state: { isActive: boolean }): void {
+    this.emitter.emit(`account:${adminId}`, state);
+  }
+
+  subscribeAccount(adminId: string, listener: (state: { isActive: boolean }) => void): () => void {
+    const channel = `account:${adminId}`;
+    this.emitter.on(channel, listener);
+    return () => this.emitter.off(channel, listener);
+  }
+
   /** حالة ترخيص مكتب لكل أجهزته المتصلة (قناة لكل مكتب). */
   publishLicense(officeId: string, state: LicenseState): void {
     this.emitter.emit(`license:${officeId}`, state);

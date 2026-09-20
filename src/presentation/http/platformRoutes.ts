@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { ApplicationError } from '../../application/errors/ApplicationError.js';
 import type { LicenseMonitor } from '../../application/use-cases/license/LicenseMonitor.js';
+import type { NotificationHub } from '../../infrastructure/realtime/NotificationHub.js';
 import type { ManageOfficeAdmins } from '../../application/use-cases/platform/ManageOfficeAdmins.js';
 import type { ManageOffices } from '../../application/use-cases/platform/ManageOffices.js';
 import type { PlatformStatsRepository } from '../../application/ports/repositories/PlatformStatsRepository.js';
@@ -77,6 +78,7 @@ export function createPlatformRoutes(deps: {
   manageOfficeAdmins: ManageOfficeAdmins;
   platformStats: PlatformStatsRepository;
   licenseMonitor: LicenseMonitor;
+  notificationHub: NotificationHub;
 }) {
   const router = Router();
   router.use(platformAuth(deps.platformApiKey));
@@ -160,13 +162,17 @@ export function createPlatformRoutes(deps: {
   router.patch(
     '/offices/:id/admins/:adminId/deactivate',
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.manageOfficeAdmins.setActive(req.params.id, req.params.adminId, false) });
+      const admin = await deps.manageOfficeAdmins.setActive(req.params.id, req.params.adminId, false);
+      deps.notificationHub.publishAccount(admin.id, { isActive: false });
+      res.json({ success: true, data: admin });
     }),
   );
   router.patch(
     '/offices/:id/admins/:adminId/activate',
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.manageOfficeAdmins.setActive(req.params.id, req.params.adminId, true) });
+      const admin = await deps.manageOfficeAdmins.setActive(req.params.id, req.params.adminId, true);
+      deps.notificationHub.publishAccount(admin.id, { isActive: true });
+      res.json({ success: true, data: admin });
     }),
   );
   return router;

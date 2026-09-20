@@ -55,6 +55,7 @@ import type { NotificationHub } from '../../infrastructure/realtime/Notification
 import type { LicenseMonitor } from '../../application/use-cases/license/LicenseMonitor.js';
 import type { TenantScope } from '../../application/ports/services/TenantScope.js';
 import type { OfficeRepository } from '../../application/ports/repositories/OfficeRepository.js';
+import type { AdminRepository } from '../../application/ports/repositories/AdminRepository.js';
 import { normalizeOfficeCode } from '../../domain/entities/Office.js';
 import type { Logger } from '../../application/ports/services/Logger.js';
 import { formatChanges, trimAmount, type MovementChange } from '../../application/use-cases/movements/helpers.js';
@@ -115,6 +116,7 @@ export function createRoutes(deps: {
   licenseMonitor: LicenseMonitor;
   tenantScope: TenantScope;
   offices: OfficeRepository;
+  admins: AdminRepository;
   logger: Logger;
   resetSystemData: ResetSystemData;
   deleteOwnAccount: DeleteOwnAccount;
@@ -130,7 +132,13 @@ export function createRoutes(deps: {
       if (!code) throw new ApplicationError('VALIDATION_ERROR', 'office code is required', 422);
       const office = await deps.offices.findByCode(code);
       if (!office) throw new ApplicationError('OFFICE_NOT_FOUND', 'كود المكتب غير صحيح', 404);
-      res.json({ success: true, data: { ...(await deps.licenseMonitor.current(office.id)), office: { code: office.code, name: office.name } } });
+      res.json({
+        success: true,
+        data: {
+          ...(await deps.licenseMonitor.current(office.id)),
+          office: { code: office.code, name: office.name, address: office.address, phone: office.phone },
+        },
+      });
     }),
   );
   const notifyAs = (actorId: string | undefined, event: NotificationEvent) =>
@@ -144,7 +152,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/admins',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('admin.manage'),
     validateQuery(paginationQuerySchema),
     asyncRoute(async (req, res) => {
@@ -154,7 +162,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/admins',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('admin.manage'),
     validate(createAdminSchema),
     asyncRoute(async (req, res) => {
@@ -165,7 +173,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/admins/:id',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('admin.manage'),
     validate(updateAdminSchema),
     asyncRoute(async (req, res) => {
@@ -176,27 +184,30 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/admins/:id/activate',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('admin.manage'),
     asyncRoute(async (req, res) => {
       const admin = await deps.manageAdmins.activate(req.params.id);
+      deps.notificationHub.publishAccount(admin.id, { isActive: true });
       notifyAs(req.auth?.adminId, { type: 'ADMIN', title: 'إعادة تفعيل إداري', message: `أُعيد تفعيل حساب الإداري «${admin.fullName}».` });
       res.json({ success: true, data: admin });
     }),
   );
   router.patch(
     '/admins/:id/deactivate',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('admin.manage'),
     asyncRoute(async (req, res) => {
       const admin = await deps.manageAdmins.deactivate(req.params.id, req.auth!.adminId);
+      // القفل يصل فوراً لأجهزة الإداري المعطَّل عبر البثّ.
+      deps.notificationHub.publishAccount(admin.id, { isActive: false });
       notifyAs(req.auth?.adminId, { type: 'ADMIN', title: 'تعطيل إداري', message: `تم تعطيل حساب الإداري «${admin.fullName}».` });
       res.json({ success: true, data: admin });
     }),
   );
   router.get(
     '/movement-types',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.view'),
     validateQuery(paginationQuerySchema),
     asyncRoute(async (req, res) => {
@@ -206,7 +217,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/movement-types/:id',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('admin.manage'),
     validate(updateMovementTypeSchema),
     asyncRoute(async (req, res) => {
@@ -215,7 +226,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/clients',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.create'),
     validate(createClientSchema),
     asyncRoute(async (req, res) => {
@@ -230,7 +241,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/clients',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.view'),
     validateQuery(clientsQuerySchema),
     asyncRoute(async (req, res) => {
@@ -246,7 +257,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/clients/cash-box',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.view'),
     asyncRoute(async (_req, res) => {
       res.json({ success: true, data: await deps.manageClients.cashBox() });
@@ -254,7 +265,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/clients/:id',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.update'),
     validate(updateClientSchema),
     asyncRoute(async (req, res) => {
@@ -265,7 +276,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/clients/:id/archive',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.update'),
     validate(archiveClientSchema),
     asyncRoute(async (req, res) => {
@@ -283,7 +294,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/clients/:id/set-cash-box',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.update'),
     asyncRoute(async (req, res) => {
       const client = await deps.manageClients.setCashBox(req.params.id);
@@ -297,7 +308,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/clients/:id/set-secret',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.update'),
     validate(secretClientSchema),
     asyncRoute(async (req, res) => {
@@ -306,7 +317,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/clients/:id/rollover',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.update'),
     asyncRoute(async (req, res) => {
       const client = await deps.manageClients.rollover(req.params.id);
@@ -320,7 +331,7 @@ export function createRoutes(deps: {
   );
   router.delete(
     '/clients/:id',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.update'),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.manageClients.delete(req.params.id) });
@@ -328,7 +339,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/client-groups',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.view'),
     validateQuery(paginationQuerySchema),
     asyncRoute(async (req, res) => {
@@ -338,7 +349,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/client-groups',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.create'),
     validate(createClientGroupSchema),
     asyncRoute(async (req, res) => {
@@ -347,7 +358,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/client-groups/:id',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.update'),
     validate(updateClientGroupSchema),
     asyncRoute(async (req, res) => {
@@ -356,7 +367,7 @@ export function createRoutes(deps: {
   );
   router.delete(
     '/client-groups/:id',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('client.update'),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.manageClientGroups.delete(req.params.id) });
@@ -364,7 +375,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/currencies',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.view'),
     validateQuery(paginationQuerySchema),
     asyncRoute(async (req, res) => {
@@ -374,7 +385,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/currencies',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('currency.manage'),
     validate(createCurrencySchema),
     asyncRoute(async (req, res) => {
@@ -383,7 +394,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/currencies/:id',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('currency.manage'),
     validate(updateCurrencySchema),
     asyncRoute(async (req, res) => {
@@ -392,7 +403,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/currencies/:id/deactivate',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('currency.manage'),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.manageCurrencies.deactivate(req.params.id) });
@@ -400,7 +411,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/currencies/:id/activate',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('currency.manage'),
     asyncRoute(async (req, res) => {
       const currency = await deps.manageCurrencies.activate(req.params.id);
@@ -410,7 +421,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/currencies/:id/icon',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('currency.manage'),
     uploadCurrencyIcon,
     asyncRoute(async (req, res) => {
@@ -421,7 +432,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/movements/transfers',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.create'),
     validate(createTransferSchema),
     asyncRoute(async (req, res) => {
@@ -431,7 +442,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/movements/settlements',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.create'),
     validate(createJournalMovementSchema),
     asyncRoute(async (req, res) => {
@@ -450,7 +461,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/movements/multi',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.create'),
     validate(createJournalMovementSchema),
     asyncRoute(async (req, res) => {
@@ -469,7 +480,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/movements/receipts',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.create'),
     validate(receiptPaymentSchema),
     asyncRoute(async (req, res) => {
@@ -488,7 +499,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/movements/payments',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.create'),
     validate(receiptPaymentSchema),
     asyncRoute(async (req, res) => {
@@ -507,7 +518,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/movements/exchanges',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.create'),
     validate(exchangeSchema),
     asyncRoute(async (req, res) => {
@@ -521,7 +532,7 @@ export function createRoutes(deps: {
     }),
   );
   // ── تعديل الحركات في مكانها (نفس الرقم) — يحتاج صلاحيتَي الإنشاء والعكس ──
-  const canEdit = [authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope), authorize('movement.create'), authorize('movement.reverse')];
+  const canEdit = [authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins), authorize('movement.create'), authorize('movement.reverse')];
   router.put(
     '/movements/transfers/:id',
     ...canEdit,
@@ -600,7 +611,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/journal',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('journal.view'),
     validateQuery(journalQuerySchema),
     asyncRoute(async (req, res) => {
@@ -624,7 +635,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/clients/:id/statement',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('journal.view'),
     validateQuery(statementQuerySchema),
     asyncRoute(async (req, res) => {
@@ -645,7 +656,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/movements',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.view'),
     validateQuery(movementsQuerySchema),
     asyncRoute(async (req, res) => {
@@ -670,7 +681,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/clients/:id/balances',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('journal.view'),
     validateQuery(balancesQuerySchema),
     asyncRoute(async (req, res) => {
@@ -679,7 +690,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/reports/balance-sheet',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('journal.view'),
     validateQuery(balanceSheetQuerySchema),
     asyncRoute(async (req, res) => {
@@ -699,7 +710,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/dashboard',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('journal.view'),
     asyncRoute(async (_req, res) => {
       res.json({ success: true, data: await deps.getDashboard.execute() });
@@ -707,7 +718,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/movements/:id',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.view'),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.getMovementDetails.execute(req.params.id) });
@@ -715,7 +726,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/movements/:id/cancel',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.cancel'),
     asyncRoute(async (req, res) => {
       const movement = await deps.cancelMovement.execute(req.params.id, req.auth!.adminId);
@@ -730,7 +741,7 @@ export function createRoutes(deps: {
   );
   router.post(
     '/movements/:id/reverse',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('movement.reverse'),
     asyncRoute(async (req, res) => {
       const result = await deps.reverseMovement.execute(req.params.id, req.auth!.adminId);
@@ -747,7 +758,7 @@ export function createRoutes(deps: {
   );
   router.get(
     '/notifications',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     validateQuery(paginationQuerySchema),
     asyncRoute(async (req, res) => {
       const q = req.validatedQuery;
@@ -756,13 +767,13 @@ export function createRoutes(deps: {
   );
   router.get(
     '/notifications/unread-count',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.getNotifications.unreadCount(req.auth!.adminId) });
     }),
   );
   // بثّ فوري (SSE): كل إشعار جديد للإداري الحالي يصل لحظة إنشائه؛ نبضة كل 20 ث تبقي الاتصال حياً.
-  router.get('/notifications/stream', authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope), (req, res) => {
+  router.get('/notifications/stream', authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins), (req, res) => {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -778,31 +789,34 @@ export function createRoutes(deps: {
     const officeId = req.auth!.officeId;
     void deps.licenseMonitor.current(officeId).then((state) => send('license', state));
     const unsubscribeLicense = deps.notificationHub.subscribeLicense(officeId, (state) => send('license', state));
+    // حالة الحساب: تعطيل/تفعيل الإداري نفسه يصل لحظة حدوثه.
+    const unsubscribeAccount = deps.notificationHub.subscribeAccount(req.auth!.adminId, (state) => send('account', state));
     const heartbeat = setInterval(() => res.write(': ping\n\n'), 20_000);
     req.on('close', () => {
       clearInterval(heartbeat);
       unsubscribe();
       unsubscribeLicense();
+      unsubscribeAccount();
       deps.logger.info({ adminId: req.auth!.adminId }, 'notifications stream closed');
     });
   });
   router.patch(
     '/notifications/read-all',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.getNotifications.markAllRead(req.auth!.adminId) });
     }),
   );
   router.patch(
     '/notifications/:id/read',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.markNotificationRead.execute(req.params.id, req.auth!.adminId) });
     }),
   );
   router.post(
     '/system/reset-data',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     authorize('admin.manage'),
     validate(resetDataSchema),
     asyncRoute(async (req, res) => {
@@ -817,7 +831,7 @@ export function createRoutes(deps: {
   );
   router.patch(
     '/auth/me/password',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     validate(changePasswordSchema),
     asyncRoute(async (req, res) => {
       const result = await deps.changeOwnPassword.execute(req.auth!.adminId, req.body.currentPassword, req.body.newPassword);
@@ -829,9 +843,20 @@ export function createRoutes(deps: {
       res.json({ success: true, data: result });
     }),
   );
+  // الحساب الحالي — تستعمله شاشة القفل لتعرف متى أُعيد التفعيل (معطَّل ⇒ 403 ADMIN_DEACTIVATED من المصادقة).
+  router.get(
+    '/auth/me',
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
+    asyncRoute(async (req, res) => {
+      const admin = await deps.admins.findById(req.auth!.adminId);
+      if (!admin) throw new ApplicationError('ADMIN_NOT_FOUND', 'Admin not found', 404);
+      const { passwordHash: _hash, ...safe } = admin;
+      res.json({ success: true, data: { admin: safe, office: { id: req.auth!.officeId, code: req.auth!.officeCode } } });
+    }),
+  );
   router.delete(
     '/auth/me',
-    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope),
+    authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),
     validate(deleteOwnAccountSchema),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.deleteOwnAccount.execute(req.auth!.adminId, req.body.password) });

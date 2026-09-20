@@ -45,7 +45,8 @@ export class Login {
         role: admin.role,
         permissions: admin.permissions ?? [],
       },
-      office: { id: office.id, code: office.code, name: office.name },
+      // اسم المكتب وعنوانه يحلّان محل «اسم/عنوان الشركة» في التطبيق (لا يعدّلهما المكتب).
+      office: { id: office.id, code: office.code, name: office.name, address: office.address, phone: office.phone },
     };
   }
 }
