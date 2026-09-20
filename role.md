@@ -102,7 +102,7 @@
 ## الترتيب والإشعارات وإعادة التفعيل — معتمد 2026-09-14
 
 - **الأحدث أولاً** في كل القوائم: الإداريون/المجموعات/العملاء/العملات `id DESC`، الحركات `created_at DESC, id_movement DESC`، قيود اليومية وكشف الحساب `created_at DESC, id_day DESC`، الإشعارات `created_at DESC`. الرصيد الجاري في كشف الحساب (`GetClientStatement`) يُحسب تنازلياً: يبدأ من رصيد نهاية الفترة ويطرح أثر كل قيد نزولاً حتى الرصيد الافتتاحي.
-- **معرّف الحركة/رقمها** (`newMovementId` في `use-cases/movements/helpers.ts`): 63 بت مرتّب زمنياً = 41 بت ميلي ثانية + 22 بت عشوائي. يضمن أن الترتيب `id DESC` يطابق ترتيب الإنشاء حتى داخل الثانية نفسها (عكس ثم إنشاء عند «تعديل الحركة» في الواجهة) ويبقى غير قابل للتخمين. المعرّفات القديمة العشوائية لا تتأثر.
+- **معرّف الحركة/رقمها** — (مُلغى 2026-09-17؛ انظر «أرقام الحركات المتسلسلة» أدناه). كان `newMovementId` معرّفاً 63 بت مرتّباً زمنياً؛ الترتيب `id DESC` ما زال يطابق ترتيب الإنشاء لأن الأرقام المتسلسلة تصاعدية.
 - **الإشعارات** تحمل المنفّذ: `notifications.actor_id` و`actor_name` (migration `20260914000100-notification-actor`)؛ كل مسار تعديل يستدعي `notifyAs(req.auth.adminId, event)`. نص الإشعار يعرض المبالغ بلا أصفار عشرية زائدة (`trimAmount`).
 - **إعادة التفعيل**: `PATCH /admins/:id/activate` (`admin.manage`) و`PATCH /currencies/:id/activate` (`currency.manage`) بجانب `deactivate`؛ إلغاء أرشفة العميل عبر `PATCH /clients/:id/archive {archived:false}`.
 - `GET /movements` يقبل `currency_id` (فلتر بوجود قيد بتلك العملة) إضافةً إلى `client_id`؛ الواجهة تبني «دفتر اليومية» بصف واحد لكل حركة من هذه النقطة مع ملخص `GET /journal`.
@@ -119,7 +119,7 @@
 ## العملات الأساسية — معتمد 2026-09-15
 
 - الأربع الثابتة: `USD` دولار، `SYP` ليرة سوري، `EUR` يورو، `TRY` ليرة تركي — تُبذر مع النظام (`20260902000100-master-data` للتثبيت الجديد، و`20260915000100-system-currencies` يعلّم الموجود ويكمّل الناقص) وتحمل `is_system = 1` (migration `20260915000100-currency-is-system`).
-- `ManageCurrencies.update` على عملة أساسية يقبل تغيير `exchangeRate`/`exchangeType` فقط؛ أي تغيير فعلي في الاسم/الرمز/الرمز النصي/العلم/الأهمية/التفعيل يُرفض بـ `SYSTEM_CURRENCY_PROTECTED` (409). القيم المطابقة للحالية لا تُعدّ تغييراً. `deactivate` مرفوض لها. الدولار عملة الأساس: سعره 1 ولا يُعدَّل.
+- `ManageCurrencies.update` على عملة أساسية يقبل تغيير `exchangeRate`/`exchangeType` فقط؛ أي تغيير فعلي في الاسم/الرمز/الرمز النصي/العلم/الأهمية/التفعيل يُرفض بـ `SYSTEM_CURRENCY_PROTECTED` (409). القيم المطابقة للحالية لا تُعدّ تغييراً. `deactivate` مرفوض لها. **سعر الدولار قابل للتعديل كباقي العملات** (قرار المستخدم 2026-09-17؛ أُزيل الرفض `BASE_CURRENCY_RATE_LOCKED`): التقييم بالدولار (`BalanceValuationService`) يستعمل `exchange_rate/exchange_type` المخزّنين لكل عملة بما فيها `USD`، فلا يُفترض 1 في أي مكان.
 - ما يُضاف من الواجهة عملة عادية (`is_system = 0`) حرّة التعديل والتعطيل. لا حذف للعملات عبر الـ API.
 - البذور الوهمية (`demo-data`, `demo-notifications`) لا تعمل إلا مع `SEED_DEMO_DATA=true` حتى تبقى النسخ المسلَّمة نظيفة.
 - `resetBusinessData`: ترتيب الحذف القيود ← تفاصيل الحركات ← **الإشعارات** ← الحركات ← العملاء غير النظاميين ← المجموعات (الإشعارات تشير إلى الحركات بقيد RESTRICT).
@@ -133,7 +133,14 @@
 - **إشعار التعديل**: `describeMovement()` يصف الحركة بالعربية (أسماء لا معرّفات) قبل وبعد، و`diffDescriptions()` يعطي الفروق، والرسالة «تعديل حوالة #N: المبلغ: من 1000 إلى 1200؛ إلى حساب: من أحمد إلى باسل».
 - **بثّ فوري (SSE)**: `GET /notifications/stream` (مصادقة Bearer) يبقى مفتوحاً ويرسل `event: notification` لكل إشعار جديد للإداري الحالي لحظة إنشائه (`NotificationHub` في `infrastructure/realtime` عبر منفذ `NotificationPublisher` المحقون في `NotifyAdmins`)، مع نبضة كل 20 ث. الواجهة تعتمده بدل الاستطلاع (الاستطلاع كل 60 ث احتياط).
 - **لا تعتمد على عدد الصفوف المتأثرة** في `update` لتقرير الوجود: MySQL يعيد 0 عندما لا تتغير القيم، فتعديلٌ بلا تغيير كان يصبح 404؛ الوجود يُقرَّر بـ `findByPk` بعد التحديث.
-- `newMovementId` انتقل مع `trimAmount/describeMovement/diffDescriptions/formatChanges` إلى `use-cases/movements/helpers.ts`؛ `loadEditableMovement` في `editing.ts`.
+- `trimAmount/describeMovement/diffDescriptions/formatChanges` في `use-cases/movements/helpers.ts`؛ `loadEditableMovement` في `editing.ts`.
+
+## أرقام الحركات المتسلسلة — معتمد 2026-09-17
+
+- رقم الحركة = `id_movement` = `movement_no` = **1، 2، 3…** يولّده `MovementRepository.nextNumber()` داخل معاملة الإنشاء: `SELECT id_movement … ORDER BY id_movement DESC LIMIT 1 FOR UPDATE` ثم +1 (القفل يمنع التكرار عند التزامن، وهو الاستثناء المعتمد من قاعدة «لا `MAX + 1` بلا قفل»). لا معرّفات عشوائية بعد الآن؛ `newMovementId` حُذف.
+- هجرة `20260917000100-sequential-movement-numbers` تعيد ترقيم الحركات الموجودة حسب `created_at` إلى 1..N عبر مرحلة وسيطة بأرقام قرب أقصى `bigint unsigned` (العمود unsigned فلا تصلح السالبة)، وتتبعها الجداول التابعة تلقائياً (`journal_entries`, `transfer/exchange/settlement/multi_movements`, `notifications` كلها `ON UPDATE CASCADE`)، ثم تضبط `AUTO_INCREMENT = N+1`. لا `down`.
+- الواجهة تعرض الرقم كما يأتي (نصي)؛ لا تعتمد على طوله.
+
 ## الأمان وجودة الكود
 
 - كلمات المرور تخزن bcrypt hashes فقط، ولا يعاد أو يسجل `password_hash` أو password أو JWT.
