@@ -1,6 +1,11 @@
 import { z } from 'zod';
+/** تسجيل الدخول: كود المكتب (يُطبَّع: أحرف كبيرة بلا مسافات) + اسم المستخدم + كلمة المرور. */
 export const loginSchema = z
-  .object({ fullName: z.string().min(1).max(150), password: z.string().min(8).max(200) })
+  .object({
+    officeCode: z.string().trim().min(4).max(16),
+    fullName: z.string().min(1).max(150),
+    password: z.string().min(8).max(200),
+  })
   .strict();
 /** تغيير كلمة مرور الحساب الحالي: الحالية + الجديدة (8 محارف فأكثر). */
 export const changePasswordSchema = z

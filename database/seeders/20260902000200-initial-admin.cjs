@@ -1,10 +1,12 @@
 'use strict';
 const bcrypt = require('bcrypt');
+const defaultOfficeId = require('../lib/defaultOffice.cjs');
 module.exports = {
   async up(queryInterface) {
     const { INITIAL_ADMIN_NAME: full_name, INITIAL_ADMIN_EMAIL: email, INITIAL_ADMIN_PASSWORD: password } = process.env;
     if (!full_name || !password) return;
     const password_hash = await bcrypt.hash(password, Number(process.env.BCRYPT_ROUNDS || 12));
+    const office_id = await defaultOfficeId(queryInterface);
     await queryInterface.bulkInsert('admins', [
       {
         full_name,
@@ -24,6 +26,7 @@ module.exports = {
         ]),
         is_developer: false,
         is_active: true,
+        office_id,
         created_at: new Date(),
         updated_at: new Date(),
       },

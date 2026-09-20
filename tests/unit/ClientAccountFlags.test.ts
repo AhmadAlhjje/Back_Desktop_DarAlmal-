@@ -107,7 +107,7 @@ describe('NotifyAdmins', () => {
     const notify = new NotifyAdmins(
       { findAllActive: vi.fn().mockResolvedValue([{ id: '1' }, { id: '2' }]) } as any,
       { create } as any,
-      { info: vi.fn(), error: vi.fn() },
+      { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     );
     const count = await notify.execute({ type: 'MOVEMENT', title: 'ت', message: 'م', movementId: '9' });
     expect(count).toBe(2);
@@ -119,7 +119,7 @@ describe('NotifyAdmins', () => {
     const notify = new NotifyAdmins(
       { findAllActive: vi.fn().mockRejectedValue(new Error('db down')) } as any,
       {} as any,
-      { info: vi.fn(), error },
+      { info: vi.fn(), warn: vi.fn(), error },
     );
     await expect(notify.execute({ type: 'SYSTEM', title: 'x', message: 'y' })).resolves.toBe(0);
     expect(error).toHaveBeenCalled();

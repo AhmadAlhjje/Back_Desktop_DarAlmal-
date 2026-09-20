@@ -1,4 +1,6 @@
 import type { ReceiptPaymentType } from '../../../domain/enums/ReceiptPaymentType.js';
+import type { OfficeRepository } from './OfficeRepository.js';
+import type { PlatformStatsRepository } from './PlatformStatsRepository.js';
 import type {
   Admin,
   Client,
@@ -48,6 +50,8 @@ export interface ClientRepository {
   findPage(page: number, limit: number, filters?: ClientListFilters): Promise<Page<Client>>;
   findCashBox(): Promise<Client | null>;
   create(input: ClientInput): Promise<Client>;
+  /** حساب نظامي مبذور عند إنشاء المكتب (SYS-CASH / SYS-PNL): لا يُحذف ولا يُؤرشف. */
+  createSystemAccount(input: { code: string; fullName: string; importance: number; isCashBox: boolean }): Promise<Client>;
   update(id: string, input: Partial<ClientInput>): Promise<Client | null>;
   /** يعيّن العميل كحساب الصندوق ويلغي التعيين عن غيره. */
   setCashBox(id: string): Promise<Client | null>;
@@ -238,6 +242,10 @@ export interface SystemRepository {
   resetBusinessData(): Promise<ResetSummary>;
 }
 export interface Repositories {
+  /** المكاتب — غير مقيّد بسياق مكتب. */
+  officeRepository: OfficeRepository;
+  /** إحصاءات المنصّة عبر المكاتب — للوحة التحكم. */
+  platformStatsRepository: PlatformStatsRepository;
   adminRepository: AdminRepository;
   systemRepository: SystemRepository;
   clientGroupRepository: ClientGroupRepository;

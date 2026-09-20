@@ -15,5 +15,9 @@ const schema = z.object({
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
   CORS_ORIGIN: z.string().min(1),
   LOG_LEVEL: z.string().default('info'),
+  /** استطلاع حالة الترخيص من قاعدة البيانات (ثوانٍ) لدفع القفل/رفعه فوراً عبر SSE. */
+  LICENSE_POLL_SECONDS: z.coerce.number().int().positive().default(10),
+  /** مفتاح لوحة التحكم لمسارات `/platform/*` (32 محرفاً فأكثر). */
+  PLATFORM_API_KEY: z.string().min(32),
 });
 export const env = schema.parse(process.env);

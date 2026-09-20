@@ -74,9 +74,15 @@ npm run db:seed
 - أرقام الحركات متسلسلة **1، 2، 3…** (`nextNumber` بقفل `FOR UPDATE` داخل المعاملة)؛ هجرة `20260917000100` تعيد ترقيم القديم.
 - سعر صرف الدولار قابل للتعديل؛ التقييم بالدولار يستعمل السعر المخزّن لكل عملة بما فيها `USD`.
 
+## المكاتب والترخيص
+
+باك اند واحد لكل المكاتب: جدول `offices` (كود المكتب + الترخيص) وعمود `office_id` في كل جدول تجاري، والعزل تلقائي عبر `tenancy-hooks`. المكاتب تُنشأ من **لوحة التحكم** (`../dashboard`) عبر `/api/v1/platform/*` بمفتاح `PLATFORM_API_KEY`؛ الإنشاء يولّد الكود ويبذر العملات والصناديق النظامية ومدير المكتب. تسجيل الدخول: كود المكتب + اسم المستخدم + كلمة المرور. الترخيص (`ACTIVE`/`SUSPENDED`/`EXPIRED` + `expires_at` + `message`) يُغيَّر من اللوحة ويصل القفل/رفعه لأجهزة المكتب خلال ≤`LICENSE_POLL_SECONDS` ثوانٍ عبر SSE؛ الطلبات ترجع `403 LICENSE_*`. البيانات الموجودة قبل الهجرة تُنسب إلى المكتب الافتراضي (`DEFAULT_OFFICE_CODE` أو كود يُطبع في سجل الهجرة).
+
 ## أهم المسارات
 
-- `POST /api/v1/auth/login`
+- `GET /api/v1/license?office=<code>` — حالة ترخيص مكتب (بلا مصادقة)
+- `/api/v1/platform/*` — واجهة لوحة التحكم (مفتاح `X-Platform-Key`)
+- `POST /api/v1/auth/login` — `{ officeCode, fullName, password }`
 - `GET|POST|PATCH /api/v1/admins`
 - `GET|POST|PATCH /api/v1/client-groups`
 - `GET|POST|PATCH /api/v1/clients`

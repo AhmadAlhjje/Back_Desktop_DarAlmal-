@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { createRoutes } from './presentation/http/routes.js';
 import { errorHandler } from './presentation/http/middleware/errorHandler.js';
 import { requestContext } from './presentation/http/middleware/requestContext.js';
+import { createPlatformRoutes } from './presentation/http/platformRoutes.js';
 import { dependencies } from './container/dependencies.js';
 import { env } from './config/env.js';
 import path from 'node:path';
@@ -17,5 +18,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 app.use(rateLimit({ windowMs: 60_000, limit: 120 }));
 app.get('/health', (_req, res) => res.json({ success: true, data: { status: 'ok' } }));
+// الترخيص يُفحص داخل المصادقة (لكل مكتب) وفي تسجيل الدخول؛ مسارات المنصّة للوحة التحكم بمفتاح خاص.
+app.use('/api/v1/platform', createPlatformRoutes(dependencies));
 app.use('/api/v1', createRoutes(dependencies));
 app.use(errorHandler(dependencies.logger));

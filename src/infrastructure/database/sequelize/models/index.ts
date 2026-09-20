@@ -10,3 +10,4 @@ export { TransferMovementModel } from './TransferMovementModel.js';
 export { MultiMovementModel } from './MultiMovementModel.js';
 export { ExchangeMovementModel } from './ExchangeMovementModel.js';
 export { NotificationModel } from './NotificationModel.js';
+export { OfficeModel } from './OfficeModel.js';

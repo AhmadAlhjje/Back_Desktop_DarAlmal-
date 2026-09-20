@@ -2,7 +2,9 @@ import { Column, DataType, Model, Table } from 'sequelize-typescript';
 @Table({ tableName: 'movements', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' })
 export class MovementModel extends Model {
   @Column({ type: DataType.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true }) declare id_movement: string;
-  @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false, unique: true }) declare movement_no: string;
+  /** المكتب المالك (عزل المستأجرين) — يُختم ويُقيَّد تلقائياً عبر tenancy-hooks. */
+  @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare office_id: string;
+  @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare movement_no: string;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare movement_type_id: string;
   @Column(DataType.BIGINT.UNSIGNED) declare client_id: string | null;
   @Column({ type: DataType.TIME, allowNull: false }) declare movement_time: string;

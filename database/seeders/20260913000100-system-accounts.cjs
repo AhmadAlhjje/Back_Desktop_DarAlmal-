@@ -1,5 +1,7 @@
 'use strict';
 
+const defaultOfficeId = require('../lib/defaultOffice.cjs');
+
 /**
  * الصناديق النظامية (قرار ج3): تُبذر مع النظام ولا يمكن حذفها أو أرشفتها.
  * - SYS-CASH «الصندوق الرئيسي»: معيّن افتراضياً كحساب الصندوق لسندات القبض والدفع.
@@ -20,6 +22,7 @@ module.exports = {
     const [cashBoxes] = await queryInterface.sequelize.query('SELECT COUNT(*) AS c FROM clients WHERE is_cash_box = 1');
     const hasCashBox = Number(cashBoxes[0]?.c ?? 0) > 0;
     const now = new Date();
+    const office_id = await defaultOfficeId(queryInterface);
     const rows = SYSTEM_ACCOUNTS.filter((a) => !present.has(a.client_code)).map((a) => ({
       client_code: a.client_code,
       group_id: null,
@@ -34,6 +37,7 @@ module.exports = {
       is_secret: false,
       archived_at: null,
       last_rollover_at: null,
+      office_id,
       created_at: now,
       updated_at: now,
     }));

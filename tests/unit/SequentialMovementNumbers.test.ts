@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CreateTransfer } from '../../src/application/use-cases/movements/CreateTransfer.js';
 
-/** أرقام الحركات متسلسلة (1، 2، 3…) تأتي من المستودع لا من مولّد عشوائي. */
+/** أرقام الحركات متسلسلة لكل مكتب (1، 2، 3…) تأتي من المستودع؛ المعرّف العام تمنحه القاعدة (تعدد المكاتب). */
 describe('sequential movement numbers', () => {
-  it('uses the repository sequence for both the id and the movement number', async () => {
-    const create = vi.fn(async (x: any) => ({ ...x }));
+  it('uses the repository sequence for the movement number and lets the database assign the id', async () => {
+    const create = vi.fn(async (x: any) => ({ ...x, id: '900' }));
     const nextNumber = vi.fn().mockResolvedValue('4');
     const repos: any = {
       movementTypeRepository: { findByCode: vi.fn().mockResolvedValue({ id: '1', isActive: true }) },
@@ -28,8 +28,10 @@ describe('sequential movement numbers', () => {
     });
     expect(nextNumber).toHaveBeenCalledOnce();
     const header = create.mock.calls[0][0];
-    expect(header.id).toBe('4');
+    expect(header.id).toBeUndefined();
     expect(header.movementNo).toBe('4');
+    // التفاصيل تُربط بالمعرّف الذي منحته القاعدة لا بالرقم.
+    expect(repos.transferRepository.create.mock.calls[0][0].movementId).toBe('900');
     // رقم قصير مقروء لا معرّف ضخم.
     expect(header.movementNo.length).toBeLessThanOrEqual(6);
   });

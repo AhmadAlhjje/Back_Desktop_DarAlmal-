@@ -30,6 +30,7 @@ module.exports = {
         await queryInterface.bulkInsert('currencies', [
           {
             ...c,
+            office_id: await require('../lib/defaultOffice.cjs')(queryInterface),
             decimal_places: 2,
             icon_path: null,
             exchange_type: 'FROM_USD_MULTIPLY',

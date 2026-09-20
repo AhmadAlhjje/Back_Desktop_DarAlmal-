@@ -34,6 +34,12 @@ import { ResetSystemData } from '../application/use-cases/system/ResetSystemData
 import { ChangeOwnPassword } from '../application/use-cases/admins/ChangeOwnPassword.js';
 import { DeleteOwnAccount } from '../application/use-cases/admins/DeleteOwnAccount.js';
 import { NotificationHub } from '../infrastructure/realtime/NotificationHub.js';
+import { LicenseMonitor } from '../application/use-cases/license/LicenseMonitor.js';
+import { SequelizeOfficeRepository } from '../infrastructure/database/sequelize/repositories/SequelizeOfficeRepository.js';
+import { SequelizePlatformStatsRepository } from '../infrastructure/database/sequelize/repositories/SequelizePlatformStatsRepository.js';
+import { tenantScope } from '../infrastructure/tenancy/TenantContext.js';
+import { ManageOffices } from '../application/use-cases/platform/ManageOffices.js';
+import { ManageOfficeAdmins } from '../application/use-cases/platform/ManageOfficeAdmins.js';
 const logger = new PinoLogger(env.LOG_LEVEL);
 const repositories = createRepositories(undefined, logger);
 const hasher = new BcryptPasswordHasher(env.BCRYPT_ROUNDS);
@@ -42,10 +48,18 @@ const uow = new SequelizeUnitOfWork(sequelize, logger);
 const clock = new SystemClock();
 const reportsRepository = new SequelizeReportsRepository(sequelize);
 const notificationHub = new NotificationHub();
+// الترخيص: يُقرأ من قاعدة المكتب ويُدفع تغيّره إلى كل المتصلين عبر SSE.
+const offices = new SequelizeOfficeRepository();
+const platformStats = new SequelizePlatformStatsRepository();
+const licenseMonitor = new LicenseMonitor(offices, clock, logger, {
+  cacheMs: 5_000,
+  pollMs: env.LICENSE_POLL_SECONDS * 1_000,
+});
+licenseMonitor.subscribe((officeId, state) => notificationHub.publishLicense(officeId, state));
 export const dependencies = {
   logger,
   tokens,
-  login: new Login(repositories.adminRepository, hasher, tokens),
+  login: new Login(offices, repositories.adminRepository, hasher, tokens, licenseMonitor, tenantScope),
   manageAdmins: new ManageAdmins(repositories.adminRepository, hasher),
   manageMovementTypes: new ManageMovementTypes(repositories.movementTypeRepository),
   createClient: new CreateClient(repositories.clientRepository, repositories.clientGroupRepository),
@@ -73,6 +87,13 @@ export const dependencies = {
   markNotificationRead: new MarkNotificationRead(repositories.notificationRepository),
   notifyAdmins: new NotifyAdmins(repositories.adminRepository, repositories.notificationRepository, logger, notificationHub),
   notificationHub,
+  licenseMonitor,
+  tenantScope,
+  offices,
+  platformStats,
+  platformApiKey: env.PLATFORM_API_KEY,
+  manageOffices: new ManageOffices(offices, platformStats, uow, tenantScope, hasher),
+  manageOfficeAdmins: new ManageOfficeAdmins(offices, repositories.adminRepository, hasher, tenantScope),
   resetSystemData: new ResetSystemData(uow, repositories.adminRepository, hasher),
   deleteOwnAccount: new DeleteOwnAccount(repositories.adminRepository, hasher),
   changeOwnPassword: new ChangeOwnPassword(repositories.adminRepository, hasher),

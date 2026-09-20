@@ -35,10 +35,9 @@ export class CreateJournalMovement {
     return this.uow.execute(async (r) => {
       const p = await this.prepare(r, input);
       const { date, time } = movementTimestamp(this.clock);
-      const id = await r.movementRepository.nextNumber();
+      const movementNo = await r.movementRepository.nextNumber();
       const movement = await r.movementRepository.create({
-        id,
-        movementNo: id,
+        movementNo,
         movementTypeId: p.typeId,
         clientId: input.clientId ?? null,
         description: input.description ?? null,
@@ -49,7 +48,7 @@ export class CreateJournalMovement {
         createdBy: input.createdBy,
         updatedBy: null,
       });
-      await p.persist(id, date, time);
+      await p.persist(movement.id, date, time);
       return movement;
     });
   }

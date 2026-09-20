@@ -2,6 +2,8 @@ import { Column, DataType, Model, Table } from 'sequelize-typescript';
 @Table({ tableName: 'journal_entries', timestamps: true, createdAt: 'created_at', updatedAt: false })
 export class JournalEntryModel extends Model {
   @Column({ type: DataType.BIGINT.UNSIGNED, primaryKey: true, autoIncrement: true }) declare id_day: string;
+  /** المكتب المالك (عزل المستأجرين) — يُختم ويُقيَّد تلقائياً عبر tenancy-hooks. */
+  @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare office_id: string;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare movement_id: string;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare client_id: string;
   @Column({ type: DataType.BIGINT.UNSIGNED, allowNull: false }) declare currency_id: string;

@@ -14,6 +14,9 @@ export class PinoLogger implements Logger {
   info(data: object, message: string) {
     this.logger.info(data, message);
   }
+  warn(data: object, message: string) {
+    this.logger.warn(data, message);
+  }
   error(data: object, message: string) {
     this.logger.error(data, message);
   }

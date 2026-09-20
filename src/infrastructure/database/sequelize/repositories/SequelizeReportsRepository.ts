@@ -1,5 +1,6 @@
 import { QueryTypes, type Sequelize } from 'sequelize';
 import type { BalanceAggregateRow, DailyPoint, ReportsRepository } from '../../../../application/ports/repositories/ReportsRepository.js';
+import { requireTenant } from '../../../tenancy/TenantContext.js';
 
 interface RawAggregate {
   client_id: string | number;
@@ -55,9 +56,12 @@ export class SequelizeReportsRepository implements ReportsRepository {
   async clientBalances(clientId: string, asOf?: string): Promise<BalanceAggregateRow[]> {
     const rows = await this.db.query<RawAggregate>(
       `${SequelizeReportsRepository.BASE_SELECT}
-       WHERE je.client_id = :clientId ${asOf ? 'AND m.created_at <= :asOf' : ''}
+       WHERE je.office_id = :officeId AND je.client_id = :clientId ${asOf ? 'AND m.created_at <= :asOf' : ''}
        ${SequelizeReportsRepository.GROUP_ORDER}`,
-      { type: QueryTypes.SELECT, replacements: { clientId, asOf: asOf ? `${asOf} 23:59:59` : null } },
+      {
+        type: QueryTypes.SELECT,
+        replacements: { officeId: requireTenant('journal_entries'), clientId, asOf: asOf ? `${asOf} 23:59:59` : null },
+      },
     );
     return this.map(rows);
   }
@@ -68,7 +72,7 @@ export class SequelizeReportsRepository implements ReportsRepository {
     clientQuery?: string;
     includeSecret?: boolean;
   }): Promise<BalanceAggregateRow[]> {
-    const conditions: string[] = ['1 = 1'];
+    const conditions: string[] = ['je.office_id = :officeId'];
     if (!filters.includeSecret) conditions.push('c.is_secret = 0');
     if (filters.asOf) conditions.push('m.created_at <= :asOf');
     if (filters.currencyId) conditions.push('je.currency_id = :currencyId');
@@ -80,6 +84,7 @@ export class SequelizeReportsRepository implements ReportsRepository {
       {
         type: QueryTypes.SELECT,
         replacements: {
+          officeId: requireTenant('journal_entries'),
           asOf: filters.asOf ? `${filters.asOf} 23:59:59` : null,
           currencyId: filters.currencyId ?? null,
           q: filters.clientQuery ? `%${filters.clientQuery}%` : null,
@@ -92,8 +97,11 @@ export class SequelizeReportsRepository implements ReportsRepository {
   async dayStats(date: string): Promise<{ count: number; totalResult: string }> {
     const rows = await this.db.query<{ c: string | number | null; r: string | null }>(
       `SELECT COUNT(*) AS c, COALESCE(SUM(total_result), 0) AS r FROM movements
-       WHERE status = 'POSTED' AND created_at >= :from AND created_at <= :to`,
-      { type: QueryTypes.SELECT, replacements: { from: `${date} 00:00:00`, to: `${date} 23:59:59` } },
+       WHERE office_id = :officeId AND status = 'POSTED' AND created_at >= :from AND created_at <= :to`,
+      {
+        type: QueryTypes.SELECT,
+        replacements: { officeId: requireTenant('movements'), from: `${date} 00:00:00`, to: `${date} 23:59:59` },
+      },
     );
     return { count: Number(rows[0]?.c ?? 0), totalResult: String(rows[0]?.r ?? '0') };
   }
@@ -101,9 +109,9 @@ export class SequelizeReportsRepository implements ReportsRepository {
   async dailySeries(days: number): Promise<DailyPoint[]> {
     const rows = await this.db.query<{ d: string; c: string | number; r: string | null }>(
       `SELECT DATE(created_at) AS d, COUNT(*) AS c, COALESCE(SUM(total_result), 0) AS r FROM movements
-       WHERE status = 'POSTED' AND created_at >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+       WHERE office_id = :officeId AND status = 'POSTED' AND created_at >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
        GROUP BY DATE(created_at) ORDER BY d ASC`,
-      { type: QueryTypes.SELECT, replacements: { days } },
+      { type: QueryTypes.SELECT, replacements: { officeId: requireTenant('movements'), days } },
     );
     return rows.map((r) => ({
       date: typeof r.d === 'string' ? r.d.slice(0, 10) : new Date(r.d).toISOString().slice(0, 10),

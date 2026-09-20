@@ -29,6 +29,9 @@ import { EntrySide } from '../../../../domain/enums/EntrySide.js';
 import type { Logger } from '../../../../application/ports/services/Logger.js';
 import { mapDatabaseError } from '../DatabaseErrorMapper.js';
 import { AMOUNT_SCALE, ZERO_AMOUNT, isZeroAmount } from '../../../../domain/value-objects/Precision.js';
+import { requireTenant } from '../../../tenancy/TenantContext.js';
+import { SequelizeOfficeRepository } from './SequelizeOfficeRepository.js';
+import { SequelizePlatformStatsRepository } from './SequelizePlatformStatsRepository.js';
 
 const mapMovementType = (m: MovementTypeModel) => ({
   id: m.id_movement_type,
@@ -39,6 +42,8 @@ const mapMovementType = (m: MovementTypeModel) => ({
 });
 export function createRepositories(transaction?: Transaction, logger?: Logger): Repositories {
   const options = transaction ? { transaction } : {};
+  const officeRepository = new SequelizeOfficeRepository(transaction);
+  const platformStatsRepository = new SequelizePlatformStatsRepository(transaction);
   const journalInclude = (movementWhere: Record<string, unknown> = {}) => [
     {
       model: MovementModel,
@@ -161,6 +166,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
     return { us: String(rows[0]?.us ?? '0'), them: String(rows[0]?.them ?? '0') };
   };
   const repositories: Repositories = {
+    officeRepository,
+    platformStatsRepository,
     adminRepository: {
       async findById(id) {
         const row = await AdminModel.findByPk(id, options);
@@ -323,6 +330,25 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         );
         return ClientMapper.toDomain(row);
       },
+      async createSystemAccount(input) {
+        const row = await ClientModel.create(
+          {
+            client_code: input.code,
+            group_id: null,
+            full_name: input.fullName,
+            phone: null,
+            email: null,
+            address: null,
+            importance: input.importance,
+            account_type: 'BOX',
+            is_system: true,
+            is_cash_box: input.isCashBox,
+            is_secret: false,
+          },
+          options,
+        );
+        return ClientMapper.toDomain(row);
+      },
       async findCashBox() {
         const row = await ClientModel.findOne({ where: { is_cash_box: true, archived_at: null }, ...options });
         return row ? ClientMapper.toDomain(row) : null;
@@ -403,8 +429,8 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             exchange_rate: i.exchangeRate,
             exchange_type: i.exchangeType,
             is_active: i.isActive,
-            // العملات الأساسية تُبذر فقط؛ ما يُضاف من الواجهة عملة عادية.
-            is_system: false,
+            // الواجهة تمرّر isSystem=false دائماً (ManageCurrencies)؛ بذر المكتب الجديد من المنصّة يمرّر true.
+            is_system: i.isSystem,
           },
           options,
         );
@@ -476,11 +502,12 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
     },
     movementRepository: {
       async nextNumber() {
-        // قفل أحدث صف داخل المعاملة: يمنع منح الرقم نفسه لعمليتين متزامنتين.
-        const rows = (await sequelize.query('SELECT id_movement AS last FROM movements ORDER BY id_movement DESC LIMIT 1 FOR UPDATE', {
-          type: QueryTypes.SELECT,
-          ...options,
-        })) as Array<{ last: string | number | null }>;
+        // رقم الحركة متسلسل لكل مكتب (1، 2، 3…) مستقل عن المعرّف العام؛ قفل أحدث صف داخل
+        // المعاملة يمنع منح الرقم نفسه لعمليتين متزامنتين في المكتب نفسه.
+        const rows = (await sequelize.query(
+          'SELECT movement_no AS last FROM movements WHERE office_id = :officeId ORDER BY movement_no DESC LIMIT 1 FOR UPDATE',
+          { type: QueryTypes.SELECT, replacements: { officeId: requireTenant('movements') }, ...options },
+        )) as Array<{ last: string | number | null }>;
         const last = rows[0]?.last ?? 0;
         return (BigInt(last) + 1n).toString();
       },
@@ -982,21 +1009,24 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       async resetBusinessData() {
         // الترتيب يحترم قيود RESTRICT: القيود ← تفاصيل الحركات ← الإشعارات (تشير إلى الحركات) ← الحركات
         // ← العملاء غير النظاميين ← المجموعات.
+        // مقيّد بمكتب الطلب فقط: تفاصيل الحركات (بلا office_id) تُحذف عبر حركات المكتب.
+        const officeId = requireTenant('movements');
         const del = async (sql: string): Promise<number> => {
-          const [, meta] = await sequelize.query(sql, options);
+          const [, meta] = await sequelize.query(sql, { ...options, replacements: { officeId } });
           const affected = (meta as { affectedRows?: number } | number | undefined) ?? 0;
           return typeof affected === 'number' ? affected : (affected.affectedRows ?? 0);
         };
-        const journalEntries = await del('DELETE FROM journal_entries');
-        await del('DELETE FROM transfer_movements');
-        await del('DELETE FROM settlement_movements');
-        await del('DELETE FROM multi_movements');
-        await del('DELETE FROM exchange_movements');
-        const notifications = await del('DELETE FROM notifications');
-        const movements = await del('DELETE FROM movements');
-        const clients = await del('DELETE FROM clients WHERE is_system = 0');
-        const clientGroups = await del('DELETE FROM client_groups');
-        await del('UPDATE clients SET archived_at = NULL, last_rollover_at = NULL WHERE is_system = 1');
+        const inOffice = 'movement_id IN (SELECT id_movement FROM movements WHERE office_id = :officeId)';
+        const journalEntries = await del('DELETE FROM journal_entries WHERE office_id = :officeId');
+        await del(`DELETE FROM transfer_movements WHERE ${inOffice}`);
+        await del(`DELETE FROM settlement_movements WHERE ${inOffice}`);
+        await del(`DELETE FROM multi_movements WHERE ${inOffice}`);
+        await del(`DELETE FROM exchange_movements WHERE ${inOffice}`);
+        const notifications = await del('DELETE FROM notifications WHERE office_id = :officeId');
+        const movements = await del('DELETE FROM movements WHERE office_id = :officeId');
+        const clients = await del('DELETE FROM clients WHERE is_system = 0 AND office_id = :officeId');
+        const clientGroups = await del('DELETE FROM client_groups WHERE office_id = :officeId');
+        await del('UPDATE clients SET archived_at = NULL, last_rollover_at = NULL WHERE is_system = 1 AND office_id = :officeId');
         return { journalEntries, movements, notifications, clients, clientGroups };
       },
     },

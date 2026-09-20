@@ -1,8 +1,11 @@
 'use strict';
 
+const defaultOfficeId = require('../lib/defaultOffice.cjs');
+
 module.exports = {
   async up(queryInterface) {
     const now = new Date();
+    const office_id = await defaultOfficeId(queryInterface);
     // العملات الأساسية الأربع (قرار المستخدم 2026-09-15): ثابتة، يُعدَّل سعر صرفها فقط.
     await queryInterface.bulkInsert(
       'currencies',
@@ -22,6 +25,7 @@ module.exports = {
         exchange_type: 'FROM_USD_MULTIPLY',
         is_active: true,
         is_system: true,
+        office_id,
         created_at: now,
       })),
     );

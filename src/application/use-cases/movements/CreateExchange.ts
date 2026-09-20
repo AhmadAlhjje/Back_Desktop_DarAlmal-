@@ -29,10 +29,9 @@ export class CreateExchange {
     return this.uow.execute(async (r) => {
       const p = await this.prepare(r, input);
       const { date, time } = movementTimestamp(this.clock);
-      const id = await r.movementRepository.nextNumber();
+      const movementNo = await r.movementRepository.nextNumber();
       const movement = await r.movementRepository.create({
-        id,
-        movementNo: id,
+        movementNo,
         movementTypeId: p.typeId,
         clientId: input.clientId,
         description: input.description ?? null,
@@ -43,7 +42,7 @@ export class CreateExchange {
         createdBy: input.createdBy,
         updatedBy: null,
       });
-      const detail = await p.persist(id, date, time);
+      const detail = await p.persist(movement.id, date, time);
       return { movement, detail };
     });
   }
