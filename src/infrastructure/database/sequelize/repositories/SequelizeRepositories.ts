@@ -526,6 +526,11 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           },
           options,
         );
+        // حد الحركات (2026-09-22): العدّاد يزيد بالإضافة فقط — التعديل/الإلغاء/العكس لا يمرّ من هنا.
+        await sequelize.query('UPDATE offices SET movements_used = movements_used + 1 WHERE id_office = :officeId', {
+          replacements: { officeId: requireTenant('movements') },
+          ...options,
+        });
         return MovementMapper.toDomain(row);
       },
       async findById(id) {

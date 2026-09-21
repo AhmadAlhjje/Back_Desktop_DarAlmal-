@@ -18,6 +18,8 @@ const office = (o: Partial<Office> = {}): Office => ({
   phone: null,
   address: 'حلب',
   notes: null,
+  movementLimit: null,
+  movementsUsed: 0,
   logoPath: null,
   logoUpdatedAt: null,
   createdAt: new Date('2026-01-01'),

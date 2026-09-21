@@ -21,9 +21,9 @@ export interface Office extends LicenseFields {
   updatedAt: Date;
 }
 
-export type OfficeInput = Omit<Office, 'id' | 'createdAt' | 'updatedAt' | 'logoPath' | 'logoUpdatedAt'> &
-  Partial<Pick<Office, 'logoPath' | 'logoUpdatedAt'>>;
-export type OfficePatch = Partial<Omit<OfficeInput, 'code'>>;
+export type OfficeInput = Omit<Office, 'id' | 'createdAt' | 'updatedAt' | 'logoPath' | 'logoUpdatedAt' | 'movementLimit' | 'movementsUsed'> &
+  Partial<Pick<Office, 'logoPath' | 'logoUpdatedAt' | 'movementLimit' | 'movementsUsed'>>;
+export type OfficePatch = Partial<Omit<OfficeInput, 'code' | 'movementsUsed'>>;
 
 /** ما يراه تطبيق المكتب عن مكتبه (مع الدخول، ومع `GET /license`، وعبر حدث SSE `office`). */
 export interface OfficePublicInfo {

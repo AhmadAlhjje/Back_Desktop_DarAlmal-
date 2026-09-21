@@ -38,6 +38,7 @@ import { LicenseMonitor } from '../application/use-cases/license/LicenseMonitor.
 import { SequelizeOfficeRepository } from '../infrastructure/database/sequelize/repositories/SequelizeOfficeRepository.js';
 import { SequelizePlatformStatsRepository } from '../infrastructure/database/sequelize/repositories/SequelizePlatformStatsRepository.js';
 import { tenantScope } from '../infrastructure/tenancy/TenantContext.js';
+import { SequelizeOfficeDeviceRepository } from '../infrastructure/database/sequelize/repositories/SequelizeOfficeDeviceRepository.js';
 import { ManageOffices } from '../application/use-cases/platform/ManageOffices.js';
 import { ManageOfficeAdmins } from '../application/use-cases/platform/ManageOfficeAdmins.js';
 const logger = new PinoLogger(env.LOG_LEVEL);
@@ -50,6 +51,7 @@ const reportsRepository = new SequelizeReportsRepository(sequelize);
 const notificationHub = new NotificationHub();
 // الترخيص: يُقرأ من قاعدة المكتب ويُدفع تغيّره إلى كل المتصلين عبر SSE.
 const offices = new SequelizeOfficeRepository();
+const officeDevices = new SequelizeOfficeDeviceRepository();
 const platformStats = new SequelizePlatformStatsRepository();
 const licenseMonitor = new LicenseMonitor(offices, clock, logger, {
   cacheMs: 5_000,
@@ -59,7 +61,7 @@ licenseMonitor.subscribe((officeId, state) => notificationHub.publishLicense(off
 export const dependencies = {
   logger,
   tokens,
-  login: new Login(offices, repositories.adminRepository, hasher, tokens, licenseMonitor, tenantScope),
+  login: new Login(offices, repositories.adminRepository, hasher, tokens, licenseMonitor, tenantScope, officeDevices),
   manageAdmins: new ManageAdmins(repositories.adminRepository, hasher),
   manageMovementTypes: new ManageMovementTypes(repositories.movementTypeRepository),
   createClient: new CreateClient(repositories.clientRepository, repositories.clientGroupRepository),
@@ -91,6 +93,7 @@ export const dependencies = {
   tenantScope,
   offices,
   admins: repositories.adminRepository,
+  officeDevices,
   platformStats,
   platformApiKey: env.PLATFORM_API_KEY,
   manageOffices: new ManageOffices(offices, platformStats, uow, tenantScope, hasher),

@@ -14,6 +14,8 @@ const toOffice = (m: OfficeModel): Office => ({
   phone: m.phone ?? null,
   address: m.address ?? null,
   notes: m.notes ?? null,
+  movementLimit: m.movement_limit ?? null,
+  movementsUsed: Number(m.movements_used ?? 0),
   logoPath: m.logo_path ?? null,
   logoUpdatedAt: m.logo_updated_at ?? null,
   createdAt: m.created_at,
@@ -53,6 +55,8 @@ export class SequelizeOfficeRepository implements OfficeRepository {
         phone: input.phone,
         address: input.address,
         notes: input.notes,
+        movement_limit: input.movementLimit ?? null,
+        movements_used: input.movementsUsed ?? 0,
         logo_path: input.logoPath ?? null,
         logo_updated_at: input.logoUpdatedAt ?? null,
       },
@@ -70,6 +74,7 @@ export class SequelizeOfficeRepository implements OfficeRepository {
     if (patch.phone !== undefined) values.phone = patch.phone;
     if (patch.address !== undefined) values.address = patch.address;
     if (patch.notes !== undefined) values.notes = patch.notes;
+    if (patch.movementLimit !== undefined) values.movement_limit = patch.movementLimit;
     if (patch.logoPath !== undefined) values.logo_path = patch.logoPath;
     if (patch.logoUpdatedAt !== undefined) values.logo_updated_at = patch.logoUpdatedAt;
     if (Object.keys(values).length > 0) await OfficeModel.update(values, { where: { id_office: id }, ...this.options });
@@ -82,12 +87,17 @@ export class SequelizeOfficeRepository implements OfficeRepository {
   }
 
   async licenseSnapshot(): Promise<Array<{ id: string } & LicenseFields>> {
-    const rows = await OfficeModel.findAll({ attributes: ['id_office', 'status', 'expires_at', 'message'], ...this.options });
+    const rows = await OfficeModel.findAll({
+      attributes: ['id_office', 'status', 'expires_at', 'message', 'movement_limit', 'movements_used'],
+      ...this.options,
+    });
     return rows.map((m) => ({
       id: m.id_office,
       status: m.status,
       expiresAt: m.expires_at ?? null,
       message: m.message?.trim() ? m.message.trim() : null,
+      movementLimit: m.movement_limit ?? null,
+      movementsUsed: Number(m.movements_used ?? 0),
     }));
   }
 }

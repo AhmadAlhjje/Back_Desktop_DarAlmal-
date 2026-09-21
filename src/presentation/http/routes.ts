@@ -56,6 +56,8 @@ import type { LicenseMonitor } from '../../application/use-cases/license/License
 import type { TenantScope } from '../../application/ports/services/TenantScope.js';
 import type { OfficeRepository } from '../../application/ports/repositories/OfficeRepository.js';
 import type { AdminRepository } from '../../application/ports/repositories/AdminRepository.js';
+import type { OfficeDeviceRepository } from '../../application/ports/repositories/OfficeDeviceRepository.js';
+import { hashDeviceKey } from '../../application/use-cases/auth/Login.js';
 import { normalizeOfficeCode, officePublicInfo } from '../../domain/entities/Office.js';
 import type { Logger } from '../../application/ports/services/Logger.js';
 import { formatChanges, trimAmount, type MovementChange } from '../../application/use-cases/movements/helpers.js';
@@ -116,6 +118,7 @@ export function createRoutes(deps: {
   licenseMonitor: LicenseMonitor;
   tenantScope: TenantScope;
   offices: OfficeRepository;
+  officeDevices: OfficeDeviceRepository;
   admins: AdminRepository;
   logger: Logger;
   resetSystemData: ResetSystemData;
@@ -128,9 +131,18 @@ export function createRoutes(deps: {
   router.get(
     '/license',
     asyncRoute(async (req, res) => {
-      const code = typeof req.query.office === 'string' ? normalizeOfficeCode(req.query.office) : '';
-      if (!code) throw new ApplicationError('VALIDATION_ERROR', 'office code is required', 422);
-      const office = await deps.offices.findByCode(code);
+      // بمفتاح الجهاز (التطبيق بعد التفعيل) أو بكود المكتب (لوحة التحكم/الفحص)
+      const deviceKey = req.header('x-device-key') ?? (typeof req.query.device === 'string' ? req.query.device : '');
+      let office = null;
+      if (deviceKey) {
+        const device = await deps.officeDevices.findActiveByKeyHash(hashDeviceKey(deviceKey));
+        if (!device) throw new ApplicationError('DEVICE_NOT_FOUND', 'هذا الجهاز غير مسجَّل — أدخل كود المكتب', 404);
+        office = await deps.offices.findById(device.officeId);
+      } else {
+        const code = typeof req.query.office === 'string' ? normalizeOfficeCode(req.query.office) : '';
+        if (!code) throw new ApplicationError('VALIDATION_ERROR', 'office code or device key is required', 422);
+        office = await deps.offices.findByCode(code);
+      }
       if (!office) throw new ApplicationError('OFFICE_NOT_FOUND', 'كود المكتب غير صحيح', 404);
       res.json({
         success: true,
@@ -147,7 +159,7 @@ export function createRoutes(deps: {
     '/auth/login',
     validate(loginSchema),
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.login.execute(req.body.officeCode, req.body.fullName, req.body.password) });
+      res.json({ success: true, data: await deps.login.execute(req.body) });
     }),
   );
   router.get(
@@ -430,6 +442,11 @@ export function createRoutes(deps: {
       res.json({ success: true, data: await deps.manageCurrencies.update(req.params.id, { iconPath }) });
     }),
   );
+  // حد الحركات (2026-09-22): بعد كل إضافة ناجحة تُقرأ حالة الترخيص من جديد فيصل القفل فوراً عند بلوغ الحد.
+  router.use('/movements', (req, res, next) => {
+    if (req.method === 'POST') res.on('finish', () => void (res.statusCode === 201 && deps.licenseMonitor.refresh()));
+    next();
+  });
   router.post(
     '/movements/transfers',
     authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins),

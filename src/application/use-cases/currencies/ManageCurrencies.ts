@@ -4,7 +4,8 @@ import type { CurrencyRepository } from '../../ports/repositories/CurrencyReposi
 import { ApplicationError } from '../../errors/ApplicationError.js';
 
 /** ما يجوز تعديله في عملة أساسية (قرار المستخدم 2026-09-15): سعر الصرف واتجاهه فقط. */
-const SYSTEM_EDITABLE: ReadonlySet<keyof Currency> = new Set<keyof Currency>(['exchangeRate', 'exchangeType']);
+// الأهمية (ترتيب العرض) قابلة للتعديل أيضاً في العملات الأساسية — قرار المستخدم 2026-09-22.
+const SYSTEM_EDITABLE: ReadonlySet<keyof Currency> = new Set<keyof Currency>(['exchangeRate', 'exchangeType', 'importance']);
 
 export class ManageCurrencies {
   constructor(private currencies: CurrencyRepository) {}

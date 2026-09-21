@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ApplicationError } from '../../application/errors/ApplicationError.js';
 import type { LicenseMonitor } from '../../application/use-cases/license/LicenseMonitor.js';
 import type { NotificationHub } from '../../infrastructure/realtime/NotificationHub.js';
+import type { OfficeDeviceRepository } from '../../application/ports/repositories/OfficeDeviceRepository.js';
 import type { ManageOfficeAdmins } from '../../application/use-cases/platform/ManageOfficeAdmins.js';
 import type { ManageOffices } from '../../application/use-cases/platform/ManageOffices.js';
 import type { PlatformStatsRepository } from '../../application/ports/repositories/PlatformStatsRepository.js';
@@ -62,6 +63,8 @@ export const setLicenseSchema = z.object({
   status: z.enum(LICENSE_STATUSES as [string, ...string[]]),
   expiresAt: dateOrNull,
   message: nullableText(500),
+  /** حد الحركات: null = بلا حد، غير موجود = لا تغيير. */
+  movementLimit: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
 });
 export const createOfficeAdminSchema = z.object({
   fullName: z.string().trim().min(2).max(150),
@@ -83,6 +86,7 @@ export function createPlatformRoutes(deps: {
   platformStats: PlatformStatsRepository;
   licenseMonitor: LicenseMonitor;
   notificationHub: NotificationHub;
+  officeDevices: OfficeDeviceRepository;
 }) {
   const router = Router();
   router.use(platformAuth(deps.platformApiKey));
@@ -172,6 +176,23 @@ export function createPlatformRoutes(deps: {
     '/offices/:id/code',
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.manageOffices.regenerateCode(req.params.id) });
+    }),
+  );
+
+  // أجهزة المكتب (2026-09-22): كل تفعيل بالكود يسجّل جهازاً؛ إلغاؤه يجبر الجهاز على كود جديد عند الدخول التالي.
+  router.get(
+    '/offices/:id/devices',
+    asyncRoute(async (req, res) => {
+      await deps.manageOffices.get(req.params.id);
+      res.json({ success: true, data: await deps.officeDevices.listByOffice(req.params.id) });
+    }),
+  );
+  router.delete(
+    '/offices/:id/devices/:deviceId',
+    asyncRoute(async (req, res) => {
+      const device = await deps.officeDevices.revoke(req.params.id, req.params.deviceId);
+      if (!device) throw new ApplicationError('DEVICE_NOT_FOUND', 'Device not found', 404);
+      res.json({ success: true, data: device });
     }),
   );
 

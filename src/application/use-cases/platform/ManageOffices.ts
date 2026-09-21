@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { LicenseStatus } from '../../../domain/entities/License.js';
+import type { StoredLicenseStatus } from '../../../domain/entities/License.js';
 import {
   OFFICE_CODE_ALPHABET,
   OFFICE_CODE_LENGTH,
@@ -149,8 +149,17 @@ export class ManageOffices {
   }
 
   /** تغيير حالة الترخيص (نشط/موقوف/منتهٍ) مع رسالة وتاريخ انتهاء اختياريين. */
-  setLicense(id: string, license: { status: LicenseStatus; expiresAt?: Date | null; message?: string | null }): Promise<Office> {
-    return this.update(id, { status: license.status, expiresAt: license.expiresAt ?? null, message: license.message ?? null });
+  setLicense(
+    id: string,
+    license: { status: StoredLicenseStatus; expiresAt?: Date | null; message?: string | null; movementLimit?: number | null },
+  ): Promise<Office> {
+    return this.update(id, {
+      status: license.status,
+      expiresAt: license.expiresAt ?? null,
+      message: license.message ?? null,
+      // حد الحركات (2026-09-22): undefined = لا تغيير، null = بلا حد
+      ...(license.movementLimit !== undefined && { movementLimit: license.movementLimit }),
+    });
   }
 
   /** إعادة توليد كود المكتب (ضاع الكود): الجلسات المفتوحة تستمر (التوكن بمعرّف المكتب)، والدخول التالي بالكود الجديد. */

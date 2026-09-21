@@ -103,6 +103,8 @@ const office = (o: Partial<Office> = {}): Office => ({
   phone: null,
   address: null,
   notes: null,
+  movementLimit: null,
+  movementsUsed: 0,
   logoPath: null,
   logoUpdatedAt: null,
   createdAt: new Date(),
@@ -111,37 +113,87 @@ const office = (o: Partial<Office> = {}): Office => ({
 });
 const scope = { run: <T>(_id: string, fn: () => Promise<T>) => fn(), current: () => null };
 
-describe('Login with office code', () => {
+describe('Login: one-time office code → device key (2026-09-22)', () => {
   const admin = { id: '9', fullName: 'مدير', passwordHash: 'h', role: 'ADMIN', permissions: ['x'], isActive: true, phone: null, email: null, isDeveloper: false };
-  const make = (found: Office | null) => {
-    const offices = { findByCode: vi.fn().mockResolvedValue(found), findById: vi.fn().mockResolvedValue(found), list: vi.fn(), create: vi.fn(), update: vi.fn(), setCode: vi.fn(), licenseSnapshot: vi.fn().mockResolvedValue([]) };
+  const make = (found: Office | null, deviceFound: { id: string; officeId: string } | null = null) => {
+    let current = found;
+    const offices = {
+      findByCode: vi.fn(async (code: string) => (current && current.code === code ? current : null)),
+      findById: vi.fn(async (id: string) => (current && current.id === id ? current : null)),
+      list: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      setCode: vi.fn(async (_id: string, code: string) => (current = current ? { ...current, code } : null)),
+      licenseSnapshot: vi.fn().mockResolvedValue([]),
+    };
+    const devices = {
+      create: vi.fn(async (input: { keyHash: string }) => ({ id: '1', keyHash: input.keyHash })),
+      findActiveByKeyHash: vi.fn().mockResolvedValue(deviceFound),
+      listByOffice: vi.fn(),
+      revoke: vi.fn(),
+      touch: vi.fn().mockResolvedValue(undefined),
+    };
     const admins = { findByFullName: vi.fn().mockResolvedValue(admin) };
     const hasher = { hash: vi.fn(), compare: vi.fn().mockResolvedValue(true) };
     const tokens = { sign: vi.fn().mockReturnValue('tok'), verify: vi.fn() };
     const monitor = new LicenseMonitor(offices, { now: () => new Date() }, undefined, { cacheMs: 0, pollMs: 60_000 });
-    return { login: new Login(offices, admins as never, hasher, tokens, monitor, scope), offices, tokens };
+    const login = new Login(offices, admins as never, hasher, tokens, monitor, scope, devices as never, () => 'NEWC0DE9', () => 'k'.repeat(64));
+    return { login, offices, tokens, devices };
   };
 
-  it('normalizes the code, checks the license, and embeds office id/code in the token', async () => {
-    const { login, offices, tokens } = make(office());
-    const result = await login.execute(' abcd-2345 ', 'مدير', 'password1');
+  it('first login with the code: issues a device key, records the device, and rotates the office code', async () => {
+    const { login, offices, tokens, devices } = make(office());
+    const result = await login.execute({ officeCode: ' abcd-2345 ', fullName: 'مدير', password: 'password1' });
     expect(offices.findByCode).toHaveBeenCalledWith('ABCD2345');
-    expect(tokens.sign).toHaveBeenCalledWith(expect.objectContaining({ adminId: '9', officeId: '5', officeCode: 'ABCD2345' }));
-    expect(result.office).toEqual({ id: '5', code: 'ABCD2345', name: 'مكتب حلب', address: null, phone: null, logoUrl: null, logoVersion: null });
+    expect(result.deviceKey).toBe('k'.repeat(64));
+    expect(devices.create).toHaveBeenCalledWith(expect.objectContaining({ officeId: '5', enrolledBy: '9' }));
+    expect((devices.create.mock.calls[0][0] as { keyHash: string }).keyHash).not.toBe('k'.repeat(64));
+    expect(offices.setCode).toHaveBeenCalledWith('5', 'NEWC0DE9');
+    expect(tokens.sign).toHaveBeenCalledWith(expect.objectContaining({ adminId: '9', officeId: '5', officeCode: 'NEWC0DE9' }));
+    expect(result.office).toMatchObject({ id: '5', code: 'NEWC0DE9', name: 'مكتب حلب' });
+    // الكود القديم استُهلك
+    await expect(login.execute({ officeCode: 'ABCD2345', fullName: 'مدير', password: 'password1' })).rejects.toMatchObject({ code: 'OFFICE_NOT_FOUND' });
+  });
+
+  it('later logins use the device key only: no code, no rotation, no new device', async () => {
+    const { login, offices, devices } = make(office(), { id: '1', officeId: '5' });
+    const result = await login.execute({ deviceKey: 'k'.repeat(64), fullName: 'مدير', password: 'password1' });
+    expect(result.deviceKey).toBeUndefined();
+    expect(devices.create).not.toHaveBeenCalled();
+    expect(offices.setCode).not.toHaveBeenCalled();
+    expect(result.office).toMatchObject({ id: '5', code: 'ABCD2345' });
+  });
+
+  it('an unknown or revoked device key → DEVICE_NOT_FOUND (the app then asks for a code)', async () => {
+    const { login } = make(office(), null);
+    await expect(login.execute({ deviceKey: 'x'.repeat(64), fullName: 'مدير', password: 'password1' })).rejects.toMatchObject({ code: 'DEVICE_NOT_FOUND', status: 404 });
   });
 
   it('rejects an unknown office code with OFFICE_NOT_FOUND before touching credentials', async () => {
     const { login } = make(null);
-    await expect(login.execute('ZZZZ9999', 'مدير', 'password1')).rejects.toMatchObject({ code: 'OFFICE_NOT_FOUND', status: 404 });
+    await expect(login.execute({ officeCode: 'ZZZZ9999', fullName: 'مدير', password: 'password1' })).rejects.toMatchObject({ code: 'OFFICE_NOT_FOUND', status: 404 });
   });
 
-  it('rejects login for a suspended office with 403 LICENSE_SUSPENDED', async () => {
-    const { login } = make(office({ status: 'SUSPENDED', message: 'لم يُسدَّد' }));
-    await expect(login.execute('ABCD2345', 'مدير', 'password1')).rejects.toMatchObject({
+  it('rejects login for a suspended office with 403 LICENSE_SUSPENDED (code is NOT consumed)', async () => {
+    const { login, offices } = make(office({ status: 'SUSPENDED', message: 'لم يُسدَّد' }));
+    await expect(login.execute({ officeCode: 'ABCD2345', fullName: 'مدير', password: 'password1' })).rejects.toMatchObject({
       code: 'LICENSE_SUSPENDED',
       status: 403,
       details: expect.objectContaining({ message: 'لم يُسدَّد' }),
     });
+    expect(offices.setCode).not.toHaveBeenCalled();
+  });
+
+  it('a wrong password does not consume the code either', async () => {
+    const { login, offices, devices } = make(office());
+    (devices as unknown as { create: ReturnType<typeof vi.fn> }).create.mockClear();
+    const hasherFail = { hash: vi.fn(), compare: vi.fn().mockResolvedValue(false) };
+    const monitor = new LicenseMonitor(offices, { now: () => new Date() }, undefined, { cacheMs: 0, pollMs: 60_000 });
+    const l = new Login(offices, { findByFullName: vi.fn().mockResolvedValue(admin) } as never, hasherFail, { sign: vi.fn(), verify: vi.fn() }, monitor, scope, devices as never);
+    await expect(l.execute({ officeCode: 'ABCD2345', fullName: 'مدير', password: 'wrong-pass' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    expect(offices.setCode).not.toHaveBeenCalled();
+    expect(devices.create).not.toHaveBeenCalled();
+    void login;
   });
 });
 

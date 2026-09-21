@@ -7,7 +7,7 @@ import type { OfficeRepository } from '../../src/application/ports/repositories/
 import type { Office } from '../../src/domain/entities/Office.js';
 
 const at = (iso: string) => new Date(iso);
-const fields = (o: Partial<LicenseFields> = {}): LicenseFields => ({ status: 'ACTIVE', expiresAt: null, message: null, ...o });
+const fields = (o: Partial<LicenseFields> = {}): LicenseFields => ({ status: 'ACTIVE', expiresAt: null, message: null, movementLimit: null, movementsUsed: 0, ...o });
 const office = (id: string, o: Partial<LicenseFields> = {}): Office => ({
   id,
   code: `CODE${id}`,
@@ -30,13 +30,35 @@ const repoOf = (list: () => Office[]): OfficeRepository => ({
   create: vi.fn(),
   update: vi.fn(),
   setCode: vi.fn(),
-  licenseSnapshot: vi.fn(async () => list().map(({ id, status, expiresAt, message }) => ({ id, status, expiresAt, message }))),
+  licenseSnapshot: vi.fn(async () =>
+    list().map(({ id, status, expiresAt, message, movementLimit, movementsUsed }) => ({ id, status, expiresAt, message, movementLimit, movementsUsed })),
+  ),
 });
 
 describe('effectiveLicenseStatus', () => {
   const now = at('2026-09-20T12:00:00Z');
   it('ACTIVE without expiry stays ACTIVE', () => {
     expect(effectiveLicenseStatus(fields(), now)).toBe('ACTIVE');
+  });
+
+  // حد الحركات (قرار المستخدم 2026-09-22): بلوغه يقفل كالإيقاف؛ بلا حد لا أثر؛ رفع الحد يفتح وحده.
+  it('LIMIT_REACHED when the additions counter reaches the limit; unlimited (null) never locks', () => {
+    expect(effectiveLicenseStatus(fields({ movementLimit: 100, movementsUsed: 99 }), now)).toBe('ACTIVE');
+    expect(effectiveLicenseStatus(fields({ movementLimit: 100, movementsUsed: 100 }), now)).toBe('LIMIT_REACHED');
+    expect(effectiveLicenseStatus(fields({ movementLimit: 100, movementsUsed: 250 }), now)).toBe('LIMIT_REACHED');
+    expect(effectiveLicenseStatus(fields({ movementLimit: null, movementsUsed: 1_000_000 }), now)).toBe('ACTIVE');
+    expect(effectiveLicenseStatus(fields({ movementLimit: 300, movementsUsed: 250 }), now)).toBe('ACTIVE');
+    // الإيقاف/الانتهاء لهما الأولوية على الحد
+    expect(effectiveLicenseStatus(fields({ status: 'SUSPENDED', movementLimit: 1, movementsUsed: 5 }), now)).toBe('SUSPENDED');
+  });
+
+  it('licenseErrorFor maps LIMIT_REACHED to 403 LICENSE_LIMIT_REACHED with the counters in details', () => {
+    const state = toLicenseState(fields({ movementLimit: 10, movementsUsed: 10 }), now);
+    const error = licenseErrorFor(state)!;
+    expect(error.code).toBe('LICENSE_LIMIT_REACHED');
+    expect(error.status).toBe(403);
+    expect(error.details).toMatchObject({ status: 'LIMIT_REACHED', movementLimit: 10, movementsUsed: 10 });
+    expect(licenseErrorFor(toLicenseState(fields({ movementLimit: 11, movementsUsed: 10 }), now))).toBeNull();
   });
   it('ACTIVE past its expiry becomes EXPIRED automatically', () => {
     expect(effectiveLicenseStatus(fields({ expiresAt: at('2026-09-20T11:59:59Z') }), now)).toBe('EXPIRED');
@@ -48,7 +70,7 @@ describe('effectiveLicenseStatus', () => {
   });
   it('toLicenseState carries message/expiry/checkedAt', () => {
     const s = toLicenseState(fields({ status: 'SUSPENDED', message: 'يرجى التواصل مع الدعم' }), now);
-    expect(s).toEqual({ status: 'SUSPENDED', expiresAt: null, message: 'يرجى التواصل مع الدعم', checkedAt: now });
+    expect(s).toEqual({ status: 'SUSPENDED', expiresAt: null, message: 'يرجى التواصل مع الدعم', movementLimit: null, movementsUsed: 0, checkedAt: now });
   });
 });
 

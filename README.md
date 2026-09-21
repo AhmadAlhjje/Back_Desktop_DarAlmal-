@@ -81,6 +81,11 @@ npm run db:seed
 ## أهم المسارات
 
 - `GET /api/v1/license?office=<code>` — حالة ترخيص مكتب (بلا مصادقة)
+- `POST /api/v1/auth/login` — `{officeCode | deviceKey, fullName, password}`: كود المكتب **لمرة واحدة** عند أول دخول على جهاز (يُصدَر `deviceKey` دائم في الرد ويتبدّل الكود فوراً — الجديد يظهر في اللوحة فقط)؛ الدخول اللاحق بـ `deviceKey`. جهاز مُلغى ⇒ `404 DEVICE_NOT_FOUND`. جدول `office_devices` (المفتاح مجزَّأ SHA-256).
+- `GET /api/v1/license` — بترويسة `X-Device-Key` (التطبيق) أو `?office=CODE`.
+- **حد الحركات** (2026-09-22): `offices.movement_limit` (null = بلا حد) و`movements_used` (يزيد بالإضافة فقط — التعديل/الإلغاء/العكس لا يمرّ بـ create). بلوغه ⇒ حالة فعلية `LIMIT_REACHED` ⇒ كل طلب `403 LICENSE_LIMIT_REACHED` (قفل كالإيقاف) حتى يرفع المالك الحد من اللوحة (`PUT /platform/offices/:id/license` بـ `movementLimit`)؛ بعد كل إضافة ناجحة يُعاد فحص الترخيص فيصل القفل فوراً عبر SSE.
+- `GET/DELETE /api/v1/platform/offices/:id/devices[/:deviceId]` — أجهزة المكتب وإلغاؤها.
+- الأهمية (`importance`) قابلة للتعديل في العملات الأساسية أيضاً.
 - `GET /api/v1/auth/me` — الحساب الحالي ومكتبه (معطَّل ⇒ `403 ADMIN_DEACTIVATED`)
 - `PUT/DELETE /api/v1/platform/offices/:id/logo` — لوغو المكتب من لوحة التحكم (multipart `logo`، ≤20MB PNG/JPG/WEBP؛ الملف تحت `uploads/offices`، ويُبثّ حدث SSE `office` بالمعلومات العامة `{id,code,name,address,phone,logoUrl,logoVersion}`؛ نفس الشكل يعود مع الدخول و`GET /license`). الهجرة `20260922000100-office-logo.cjs`.
 - `/api/v1/platform/*` — واجهة لوحة التحكم (مفتاح `X-Platform-Key`)
@@ -140,3 +145,6 @@ npm run build
 ## النشر على VPS بـ Docker
 
 `Dockerfile` (صورة تشغيل خفيفة مع sequelize-cli) + `docker-compose.yml` (المنفذ 5002، مجلد دائم `uploads_data` لأيقونات العملات) + `docker/entrypoint.sh` (ينتظر القاعدة عبر `docker/wait-for-db.cjs` ثم يشغّل الهجرات تلقائياً ثم الخادم). القاعدة هي حاوية MariaDB التي تنشئها لوحة التحكم (`dashboard/server`) على الشبكة المشتركة `wafeer-net` (`docker network create wafeer-net` مرة واحدة، ثم شغّل لوحة التحكم أولاً). الإعدادات من `.env` (انسخ `.env.example`)؛ `DB_NAME/DB_USER/DB_PASSWORD` و`PLATFORM_API_KEY` يجب أن تطابق `dashboard/server/.env`. عند أول تشغيل على قاعدة فارغة تُنشئ الهجرة مكتباً افتراضياً بكوده في السجل (أو `DEFAULT_OFFICE_CODE`)؛ المكاتب الحقيقية تُنشأ من لوحة التحكم. أنواع الحركات الستة (بيانات مرجعية) تضمنها الهجرة `20260922000200-ensure-movement-types.cjs` فلا حاجة لتشغيل seeders على الخادم. الخادم الحالي: `163.245.221.210:5002` (افتحه في الجدار الناري لتطبيق وفير المكتبي).
+
+### النسخ الاحتياطي على الخادم
+`docker/backup.sh` يأخذ لقطة متسقة لقاعدة البيانات (كل المكاتب) + مجلد `uploads` إلى `/opt/backups/<التاريخ>/` ويحذف ما هو أقدم من 14 يوماً؛ يُجدوَل بـ cron يومياً. `docker/restore.sh <مجلد النسخة>` يستعيدها (يستبدل القاعدة كاملة). انسخ `/opt/backups` دورياً خارج الخادم (rclone/scp) — نسخة على نفس الجهاز لا تحمي من ضياعه.

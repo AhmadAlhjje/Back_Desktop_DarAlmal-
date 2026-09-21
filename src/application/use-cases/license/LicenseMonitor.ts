@@ -42,7 +42,11 @@ export class LicenseMonitor {
           { officeId, errorMessage: error instanceof Error ? error.message : String(error) },
           'license read failed; keeping last known state',
         );
-        if (!cached) this.cache.set(officeId, { license: { status: 'ACTIVE', expiresAt: null, message: null }, at: now.getTime() });
+        if (!cached)
+          this.cache.set(officeId, {
+            license: { status: 'ACTIVE', expiresAt: null, message: null, movementLimit: null, movementsUsed: 0 },
+            at: now.getTime(),
+          });
       }
     }
     return toLicenseState(this.cache.get(officeId)!.license, now);
@@ -67,7 +71,14 @@ export class LicenseMonitor {
     for (const row of snapshot) {
       this.cache.set(row.id, { license: row, at: now.getTime() });
       const state = toLicenseState(row, now);
-      const signature = JSON.stringify({ s: state.status, e: state.expiresAt?.getTime() ?? null, m: state.message });
+      const signature = JSON.stringify({
+        s: state.status,
+        e: state.expiresAt?.getTime() ?? null,
+        m: state.message,
+        l: state.movementLimit,
+        // العدّاد يُبثّ فقط لمن له حد (المكاتب بلا حد لا تحتاج حدثاً مع كل حركة)
+        u: state.movementLimit === null ? null : state.movementsUsed,
+      });
       const previous = this.signatures.get(row.id);
       this.signatures.set(row.id, signature);
       if (this.primed && previous !== signature) {
