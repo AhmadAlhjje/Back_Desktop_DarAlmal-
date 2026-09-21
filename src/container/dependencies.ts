@@ -61,7 +61,7 @@ licenseMonitor.subscribe((officeId, state) => notificationHub.publishLicense(off
 export const dependencies = {
   logger,
   tokens,
-  login: new Login(offices, repositories.adminRepository, hasher, tokens, licenseMonitor, tenantScope, officeDevices),
+  login: new Login(offices, repositories.adminRepository, hasher, tokens, licenseMonitor, tenantScope, officeDevices, notificationHub),
   manageAdmins: new ManageAdmins(repositories.adminRepository, hasher),
   manageMovementTypes: new ManageMovementTypes(repositories.movementTypeRepository),
   createClient: new CreateClient(repositories.clientRepository, repositories.clientGroupRepository),

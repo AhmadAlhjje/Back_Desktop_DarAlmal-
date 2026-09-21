@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { AdminRepository } from '../../ports/repositories/AdminRepository.js';
 import type { OfficeDeviceRepository } from '../../ports/repositories/OfficeDeviceRepository.js';
+import type { SessionPresence } from '../../ports/services/SessionPresence.js';
 import type { OfficeRepository } from '../../ports/repositories/OfficeRepository.js';
 import type { PasswordHasher } from '../../ports/services/PasswordHasher.js';
 import type { TenantScope } from '../../ports/services/TenantScope.js';
@@ -39,12 +40,13 @@ export class Login {
     private license: LicenseMonitor,
     private scope: TenantScope,
     private devices: OfficeDeviceRepository,
+    private presence: SessionPresence = { isActiveElsewhere: () => false },
     private codeGenerator: () => string = generateOfficeCode,
     private keyGenerator: () => string = () => randomBytes(32).toString('hex'),
   ) {}
 
   async execute(input: LoginInput) {
-    const { office, enrolling } = await this.resolveOffice(input);
+    const { office, enrolling, deviceId: knownDevice } = await this.resolveOffice(input);
     const licenseError = licenseErrorFor(await this.license.current(office.id));
     if (licenseError) throw licenseError;
 
@@ -52,17 +54,23 @@ export class Login {
     if (!admin?.isActive || !(await this.hasher.compare(input.password, admin.passwordHash)))
       throw new ApplicationError('INVALID_CREDENTIALS', 'Invalid full name or password', 401);
 
+    // جلسة واحدة لكل حساب (2026-09-22): مفتوح على جهاز آخر الآن ⇒ يُرفض الدخول قبل أي أثر (لا استهلاك للكود).
+    if (this.presence.isActiveElsewhere(admin.id, knownDevice))
+      throw new ApplicationError('ACCOUNT_IN_USE', 'الحساب مفتوح على حاسوب آخر — لا يمكنك فتحه الآن', 409);
+
     let deviceKey: string | undefined;
+    let deviceId = knownDevice;
     let current = office;
     if (enrolling) {
       // الكود صالح لتفعيل جهاز واحد: نُصدر مفتاحاً دائماً ثم نُبدّل الكود فوراً.
       deviceKey = this.keyGenerator();
-      await this.devices.create({
+      const device = await this.devices.create({
         officeId: office.id,
         keyHash: hashDeviceKey(deviceKey),
         label: `${admin.fullName} — ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`,
         enrolledBy: admin.id,
       });
+      deviceId = device.id;
       current = (await this.offices.setCode(office.id, await this.uniqueCode())) ?? office;
     }
 
@@ -73,6 +81,7 @@ export class Login {
         permissions: admin.permissions ?? [],
         officeId: current.id,
         officeCode: current.code,
+        ...(deviceId && { deviceId }),
       }),
       admin: {
         id: admin.id,
@@ -87,7 +96,7 @@ export class Login {
   }
 
   /** المكتب من مفتاح الجهاز (دخول لاحق) أو من الكود (تفعيل أول). */
-  private async resolveOffice(input: LoginInput): Promise<{ office: Office; enrolling: boolean }> {
+  private async resolveOffice(input: LoginInput): Promise<{ office: Office; enrolling: boolean; deviceId?: string }> {
     const deviceKey = input.deviceKey?.trim();
     if (deviceKey) {
       const device = await this.devices.findActiveByKeyHash(hashDeviceKey(deviceKey));
@@ -95,7 +104,7 @@ export class Login {
       const office = await this.offices.findById(device.officeId);
       if (!office) throw new ApplicationError('OFFICE_NOT_FOUND', 'كود المكتب غير صحيح', 404);
       void this.devices.touch(device.id, new Date()).catch(() => undefined);
-      return { office, enrolling: false };
+      return { office, enrolling: false, deviceId: device.id };
     }
     const code = input.officeCode ? normalizeOfficeCode(input.officeCode) : '';
     if (!code) throw new ApplicationError('VALIDATION_ERROR', 'officeCode or deviceKey is required', 422);

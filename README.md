@@ -85,6 +85,7 @@ npm run db:seed
 - `GET /api/v1/license` — بترويسة `X-Device-Key` (التطبيق) أو `?office=CODE`.
 - **حد الحركات** (2026-09-22): `offices.movement_limit` (null = بلا حد) و`movements_used` (يزيد بالإضافة فقط — التعديل/الإلغاء/العكس لا يمرّ بـ create). بلوغه ⇒ حالة فعلية `LIMIT_REACHED` ⇒ كل طلب `403 LICENSE_LIMIT_REACHED` (قفل كالإيقاف) حتى يرفع المالك الحد من اللوحة (`PUT /platform/offices/:id/license` بـ `movementLimit`)؛ بعد كل إضافة ناجحة يُعاد فحص الترخيص فيصل القفل فوراً عبر SSE.
 - `GET/DELETE /api/v1/platform/offices/:id/devices[/:deviceId]` — أجهزة المكتب وإلغاؤها.
+- **جلسة واحدة لكل حساب** (2026-09-22): «الحساب مفتوح» = له بثّ SSE حيّ من جهاز (`NotificationHub.claim/release` عند فتح/إغلاق `/notifications/stream`؛ الجهاز من `deviceId` في التوكن). دخول أو أي طلب من جهاز آخر أثناء ذلك ⇒ `409 ACCOUNT_IN_USE` («الحساب مفتوح على حاسوب آخر»)؛ إغلاق التطبيق يقطع البثّ فيتحرّر الحساب خلال ثوانٍ، والجهاز نفسه لا يحجب نفسه.
 - الأهمية (`importance`) قابلة للتعديل في العملات الأساسية أيضاً.
 - `GET /api/v1/auth/me` — الحساب الحالي ومكتبه (معطَّل ⇒ `403 ADMIN_DEACTIVATED`)
 - `PUT/DELETE /api/v1/platform/offices/:id/logo` — لوغو المكتب من لوحة التحكم (multipart `logo`، ≤20MB PNG/JPG/WEBP؛ الملف تحت `uploads/offices`، ويُبثّ حدث SSE `office` بالمعلومات العامة `{id,code,name,address,phone,logoUrl,logoVersion}`؛ نفس الشكل يعود مع الدخول و`GET /license`). الهجرة `20260922000100-office-logo.cjs`.

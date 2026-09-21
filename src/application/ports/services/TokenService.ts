@@ -5,6 +5,8 @@ export interface TokenPayload {
   /** المكتب (المستأجر) الذي ينتمي إليه الإداري — يحدّد قاعدة كل طلب. */
   officeId: string;
   officeCode: string;
+  /** الجهاز المفعَّل الذي صدر له التوكن (أحادية الجلسة) — قد يغيب في التوكنات القديمة. */
+  deviceId?: string;
 }
 export interface TokenService {
   sign(payload: TokenPayload): string;

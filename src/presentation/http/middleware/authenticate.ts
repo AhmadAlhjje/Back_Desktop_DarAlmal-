@@ -3,11 +3,17 @@ import type { TokenService } from '../../../application/ports/services/TokenServ
 import type { TenantScope } from '../../../application/ports/services/TenantScope.js';
 import type { AdminRepository } from '../../../application/ports/repositories/AdminRepository.js';
 import type { LicenseMonitor } from '../../../application/use-cases/license/LicenseMonitor.js';
+import type { SessionPresence } from '../../../application/ports/services/SessionPresence.js';
 import { licenseErrorFor } from '../../../application/use-cases/license/licenseError.js';
 import { ApplicationError } from '../../../application/errors/ApplicationError.js';
 
 /** خطأ الحساب المعطَّل: يقفل التطبيق حتى يعيد المكتب/اللوحة تفعيله. */
 export const ADMIN_DEACTIVATED = 'ADMIN_DEACTIVATED';
+/** الحساب مفتوح على حاسوب آخر (قرار المستخدم 2026-09-22): جلسة واحدة حيّة لكل حساب. */
+export const ACCOUNT_IN_USE = 'ACCOUNT_IN_USE';
+export const accountInUseError = () =>
+  new ApplicationError(ACCOUNT_IN_USE, 'الحساب مفتوح على حاسوب آخر — لا يمكنك فتحه الآن', 409, { checkedAt: new Date() });
+
 export const adminDeactivatedError = () =>
   new ApplicationError(ADMIN_DEACTIVATED, 'تم تعطيل حسابك من قِبل الإدارة', 403, { checkedAt: new Date() });
 
@@ -18,7 +24,7 @@ export const adminDeactivatedError = () =>
  * قرار المستخدم 2026-09-20)، ثم يمرّر الطلب.
  */
 export const authenticate =
-  (tokens: TokenService, license: LicenseMonitor, scope: TenantScope, admins: AdminRepository): RequestHandler =>
+  (tokens: TokenService, license: LicenseMonitor, scope: TenantScope, admins: AdminRepository, presence?: SessionPresence): RequestHandler =>
   (req, _res, next) => {
     const value = req.header('authorization');
     if (!value?.startsWith('Bearer ')) return next(new ApplicationError('UNAUTHENTICATED', 'Authentication required', 401));
@@ -37,6 +43,8 @@ export const authenticate =
         return scope.run(req.auth!.officeId, async () => {
           const admin = await admins.findById(req.auth!.adminId);
           if (!admin || !admin.isActive) return next(adminDeactivatedError());
+          // جلسة واحدة لكل حساب: جهاز آخر يملك بثّاً حيّاً ⇒ يُرفض كل طلب من هذا الجهاز.
+          if (presence?.isActiveElsewhere(req.auth!.adminId, req.auth!.deviceId)) return next(accountInUseError());
           next();
         });
       })

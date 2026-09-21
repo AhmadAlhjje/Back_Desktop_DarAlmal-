@@ -62,3 +62,33 @@ describe('NotificationHub account channel', () => {
     expect(mine).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('single live session per account (2026-09-22)', () => {
+  it('the hub tracks live streams per admin+device; another device is "elsewhere", the same device is not; release frees it', () => {
+    const hub = new NotificationHub();
+    expect(hub.isActiveElsewhere('4', 'devA')).toBe(false);
+    const release = hub.claim('4', 'devA');
+    expect(hub.isActiveElsewhere('4', 'devB')).toBe(true);
+    expect(hub.isActiveElsewhere('4', 'devA')).toBe(false);
+    expect(hub.isActiveElsewhere('4', undefined)).toBe(true);
+    expect(hub.isActiveElsewhere('9', 'devB')).toBe(false);
+    expect(hub.activeDevice('4')).toBe('devA');
+    release();
+    expect(hub.isActiveElsewhere('4', 'devB')).toBe(false);
+    expect(hub.activeDevice('4')).toBeNull();
+  });
+
+  it('authenticate rejects requests from a device while another device holds the live session (409 ACCOUNT_IN_USE)', async () => {
+    const hub = new NotificationHub();
+    hub.claim('4', 'devA');
+    const admins = { findById: vi.fn().mockResolvedValue({ id: '4', isActive: true }) } as never;
+    const run = (deviceId: string | undefined) =>
+      new Promise<unknown>((resolve) => {
+        const t = { sign: vi.fn(), verify: vi.fn().mockReturnValue({ ...payload, deviceId }) };
+        authenticate(t, activeLicense, scope, admins, hub)({ header: () => 'Bearer x' } as never, {} as never, (err?: unknown) => resolve(err));
+      });
+    expect(((await run('devB')) as ApplicationError).code).toBe('ACCOUNT_IN_USE');
+    expect(((await run('devB')) as ApplicationError).status).toBe(409);
+    expect(await run('devA')).toBeUndefined();
+  });
+});

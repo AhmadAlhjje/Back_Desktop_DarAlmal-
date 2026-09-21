@@ -137,8 +137,9 @@ describe('Login: one-time office code → device key (2026-09-22)', () => {
     const hasher = { hash: vi.fn(), compare: vi.fn().mockResolvedValue(true) };
     const tokens = { sign: vi.fn().mockReturnValue('tok'), verify: vi.fn() };
     const monitor = new LicenseMonitor(offices, { now: () => new Date() }, undefined, { cacheMs: 0, pollMs: 60_000 });
-    const login = new Login(offices, admins as never, hasher, tokens, monitor, scope, devices as never, () => 'NEWC0DE9', () => 'k'.repeat(64));
-    return { login, offices, tokens, devices };
+    const presence = { isActiveElsewhere: vi.fn().mockReturnValue(false) };
+    const login = new Login(offices, admins as never, hasher, tokens, monitor, scope, devices as never, presence, () => 'NEWC0DE9', () => 'k'.repeat(64));
+    return { login, offices, tokens, devices, presence };
   };
 
   it('first login with the code: issues a device key, records the device, and rotates the office code', async () => {
@@ -167,6 +168,19 @@ describe('Login: one-time office code → device key (2026-09-22)', () => {
   it('an unknown or revoked device key → DEVICE_NOT_FOUND (the app then asks for a code)', async () => {
     const { login } = make(office(), null);
     await expect(login.execute({ deviceKey: 'x'.repeat(64), fullName: 'مدير', password: 'password1' })).rejects.toMatchObject({ code: 'DEVICE_NOT_FOUND', status: 404 });
+  });
+
+  it('device id travels in the token; ACCOUNT_IN_USE (409) when the account is live on another device — the code is not consumed', async () => {
+    const { login, tokens, presence } = make(office(), { id: '1', officeId: '5' });
+    await login.execute({ deviceKey: 'k'.repeat(64), fullName: 'مدير', password: 'password1' });
+    expect(tokens.sign).toHaveBeenCalledWith(expect.objectContaining({ deviceId: '1' }));
+    expect(presence.isActiveElsewhere).toHaveBeenCalledWith('9', '1');
+
+    const busy = make(office());
+    busy.presence.isActiveElsewhere.mockReturnValue(true);
+    await expect(busy.login.execute({ officeCode: 'ABCD2345', fullName: 'مدير', password: 'password1' })).rejects.toMatchObject({ code: 'ACCOUNT_IN_USE', status: 409 });
+    expect(busy.offices.setCode).not.toHaveBeenCalled();
+    expect(busy.devices.create).not.toHaveBeenCalled();
   });
 
   it('rejects an unknown office code with OFFICE_NOT_FOUND before touching credentials', async () => {
