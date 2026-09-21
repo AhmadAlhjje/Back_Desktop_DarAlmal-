@@ -1,0 +1,17 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+tests
+coverage
+uploads
+postman
+*.log
+*.sql
+*.pdf
+*.docx
+*.png
+*.txt
+front mvp
+.git

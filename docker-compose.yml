@@ -1,0 +1,35 @@
+# خادم وفير (الباك اند) على المنفذ 5002 — يستعمل قاعدة MariaDB التي تنشئها لوحة التحكم
+# (dashboard/server/docker-compose.yml) عبر شبكة Docker مشتركة اسمها wafeer-net.
+# قبل أول تشغيل (مرة واحدة على الخادم):  docker network create wafeer-net
+# الإعدادات من ملف .env بجانب هذا الملف (انسخ .env.example إلى .env واملأه).
+#   التشغيل/التحديث:  docker compose up -d --build
+#   السجلات:          docker compose logs -f
+#   الإيقاف:          docker compose down     (أيقونات العملات تبقى في المجلد uploads_data)
+services:
+  wafeer:
+    build: .
+    image: wafeer-backend
+    container_name: wafeer-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "5002"
+      # القاعدة هي حاوية لوحة التحكم على الشبكة المشتركة — تغلب ما في .env
+      DB_HOST: wafeer-dashboard-db
+      DB_PORT: "3306"
+      # الهجرات تُشغَّل تلقائياً عند كل إقلاع (آمنة: كل ملف مرة واحدة). false لتعطيلها.
+      RUN_MIGRATIONS: "true"
+    # 5002 مفتوح للعامة: تطبيق وفير المكتبي عند العملاء يتصل بـ http://163.245.221.210:5002
+    ports:
+      - "5002:5002"
+    volumes:
+      - uploads_data:/app/uploads
+
+volumes:
+  uploads_data:
+
+networks:
+  default:
+    name: wafeer-net
+    external: true
