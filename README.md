@@ -82,7 +82,7 @@ npm run db:seed
 
 - `GET /api/v1/license?office=<code>` — حالة ترخيص مكتب (بلا مصادقة)
 - `GET /api/v1/auth/me` — الحساب الحالي ومكتبه (معطَّل ⇒ `403 ADMIN_DEACTIVATED`)
-- `PUT/DELETE /api/v1/platform/offices/:id/logo` — لوغو المكتب من لوحة التحكم (multipart `logo`، ≤2MB PNG/JPG/WEBP؛ الملف تحت `uploads/offices`، ويُبثّ حدث SSE `office` بالمعلومات العامة `{id,code,name,address,phone,logoUrl,logoVersion}`؛ نفس الشكل يعود مع الدخول و`GET /license`). الهجرة `20260922000100-office-logo.cjs`.
+- `PUT/DELETE /api/v1/platform/offices/:id/logo` — لوغو المكتب من لوحة التحكم (multipart `logo`، ≤20MB PNG/JPG/WEBP؛ الملف تحت `uploads/offices`، ويُبثّ حدث SSE `office` بالمعلومات العامة `{id,code,name,address,phone,logoUrl,logoVersion}`؛ نفس الشكل يعود مع الدخول و`GET /license`). الهجرة `20260922000100-office-logo.cjs`.
 - `/api/v1/platform/*` — واجهة لوحة التحكم (مفتاح `X-Platform-Key`)
 - `POST /api/v1/auth/login` — `{ officeCode, fullName, password }`
 - `GET|POST|PATCH /api/v1/admins`
