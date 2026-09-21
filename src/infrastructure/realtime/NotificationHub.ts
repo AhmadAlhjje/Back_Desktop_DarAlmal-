@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { Notification } from '../../domain/entities/types.js';
 import type { LicenseState } from '../../domain/entities/License.js';
+import type { OfficePublicInfo } from '../../domain/entities/Office.js';
 import type { NotificationPublisher } from '../../application/ports/services/NotificationPublisher.js';
 
 /**
@@ -31,6 +32,17 @@ export class NotificationHub implements NotificationPublisher {
 
   subscribeAccount(adminId: string, listener: (state: { isActive: boolean }) => void): () => void {
     const channel = `account:${adminId}`;
+    this.emitter.on(channel, listener);
+    return () => this.emitter.off(channel, listener);
+  }
+
+  /** معلومات المكتب (الاسم/العنوان/اللوغو) لأجهزته المتصلة — تغيير اللوغو من اللوحة يصل فوراً. */
+  publishOffice(info: OfficePublicInfo): void {
+    this.emitter.emit(`office:${info.id}`, info);
+  }
+
+  subscribeOffice(officeId: string, listener: (info: OfficePublicInfo) => void): () => void {
+    const channel = `office:${officeId}`;
     this.emitter.on(channel, listener);
     return () => this.emitter.off(channel, listener);
   }

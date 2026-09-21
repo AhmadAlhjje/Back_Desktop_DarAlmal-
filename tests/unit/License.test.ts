@@ -15,6 +15,8 @@ const office = (id: string, o: Partial<LicenseFields> = {}): Office => ({
   phone: null,
   address: null,
   notes: null,
+  logoPath: null,
+  logoUpdatedAt: null,
   createdAt: at('2026-01-01'),
   updatedAt: at('2026-01-01'),
   ...fields(o),

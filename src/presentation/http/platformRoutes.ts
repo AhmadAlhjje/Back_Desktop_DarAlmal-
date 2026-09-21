@@ -10,6 +10,10 @@ import type { PlatformStatsRepository } from '../../application/ports/repositori
 import { LICENSE_STATUSES } from '../../domain/entities/License.js';
 import { AdminRole } from '../../domain/enums/AdminRole.js';
 import { validate } from './middleware/validate.js';
+import { officeLogoDirectory, uploadOfficeLogo } from './middleware/officeLogoUpload.js';
+import { officePublicInfo } from '../../domain/entities/Office.js';
+import { rm } from 'node:fs/promises';
+import path from 'node:path';
 
 const asyncRoute =
   (handler: RequestHandler): RequestHandler =>
@@ -126,6 +130,41 @@ export function createPlatformRoutes(deps: {
       // تبليغ فوري (بلا انتظار الاستطلاع) لأجهزة المكتب المتصلة.
       await deps.licenseMonitor.refresh();
       res.json({ success: true, data: office });
+    }),
+  );
+
+  // لوغو المكتب: يُبدَّل من اللوحة متى شاء المالك ويصل للتطبيق فوراً (SSE `office`) — قرار المستخدم 2026-09-21.
+  const removeLogoFile = async (logoPath: string | null) => {
+    if (!logoPath) return;
+    const abs = path.resolve(process.cwd(), logoPath);
+    if (!abs.startsWith(officeLogoDirectory)) return; // لا نحذف إلا داخل مجلد اللوغوهات
+    await rm(abs, { force: true }).catch(() => undefined);
+  };
+  router.put(
+    '/offices/:id/logo',
+    (req, res, next) => uploadOfficeLogo(req, res, (err?: unknown) => (err ? next(err) : next())),
+    asyncRoute(async (req, res) => {
+      if (!req.file) throw new ApplicationError('VALIDATION_ERROR', 'logo file is required', 422);
+      const logoPath = `uploads/offices/${req.file.filename}`;
+      let result;
+      try {
+        result = await deps.manageOffices.setLogo(req.params.id, logoPath);
+      } catch (error) {
+        await removeLogoFile(logoPath);
+        throw error;
+      }
+      await removeLogoFile(result.previousPath);
+      deps.notificationHub.publishOffice(officePublicInfo(result.office));
+      res.json({ success: true, data: result.office });
+    }),
+  );
+  router.delete(
+    '/offices/:id/logo',
+    asyncRoute(async (req, res) => {
+      const result = await deps.manageOffices.setLogo(req.params.id, null);
+      await removeLogoFile(result.previousPath);
+      deps.notificationHub.publishOffice(officePublicInfo(result.office));
+      res.json({ success: true, data: result.office });
     }),
   );
 

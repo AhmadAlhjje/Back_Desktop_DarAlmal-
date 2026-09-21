@@ -14,6 +14,8 @@ const toOffice = (m: OfficeModel): Office => ({
   phone: m.phone ?? null,
   address: m.address ?? null,
   notes: m.notes ?? null,
+  logoPath: m.logo_path ?? null,
+  logoUpdatedAt: m.logo_updated_at ?? null,
   createdAt: m.created_at,
   updatedAt: m.updated_at,
 });
@@ -51,6 +53,8 @@ export class SequelizeOfficeRepository implements OfficeRepository {
         phone: input.phone,
         address: input.address,
         notes: input.notes,
+        logo_path: input.logoPath ?? null,
+        logo_updated_at: input.logoUpdatedAt ?? null,
       },
       this.options,
     );
@@ -66,6 +70,8 @@ export class SequelizeOfficeRepository implements OfficeRepository {
     if (patch.phone !== undefined) values.phone = patch.phone;
     if (patch.address !== undefined) values.address = patch.address;
     if (patch.notes !== undefined) values.notes = patch.notes;
+    if (patch.logoPath !== undefined) values.logo_path = patch.logoPath;
+    if (patch.logoUpdatedAt !== undefined) values.logo_updated_at = patch.logoUpdatedAt;
     if (Object.keys(values).length > 0) await OfficeModel.update(values, { where: { id_office: id }, ...this.options });
     return this.findById(id);
   }

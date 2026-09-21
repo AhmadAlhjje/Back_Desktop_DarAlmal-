@@ -103,6 +103,8 @@ const office = (o: Partial<Office> = {}): Office => ({
   phone: null,
   address: null,
   notes: null,
+  logoPath: null,
+  logoUpdatedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   ...o,
@@ -125,7 +127,7 @@ describe('Login with office code', () => {
     const result = await login.execute(' abcd-2345 ', 'مدير', 'password1');
     expect(offices.findByCode).toHaveBeenCalledWith('ABCD2345');
     expect(tokens.sign).toHaveBeenCalledWith(expect.objectContaining({ adminId: '9', officeId: '5', officeCode: 'ABCD2345' }));
-    expect(result.office).toEqual({ id: '5', code: 'ABCD2345', name: 'مكتب حلب', address: null, phone: null });
+    expect(result.office).toEqual({ id: '5', code: 'ABCD2345', name: 'مكتب حلب', address: null, phone: null, logoUrl: null, logoVersion: null });
   });
 
   it('rejects an unknown office code with OFFICE_NOT_FOUND before touching credentials', async () => {

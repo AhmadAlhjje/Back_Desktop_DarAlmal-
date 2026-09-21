@@ -13,12 +13,42 @@ export interface Office extends LicenseFields {
   phone: string | null;
   address: string | null;
   notes: string | null;
+  /** لوغو المكتب من لوحة التحكم: مسار نسبي تحت `uploads/offices` أو null. */
+  logoPath: string | null;
+  /** يتغيّر مع كل رفع — يعرف به التطبيق أن عليه تنزيل اللوغو الجديد. */
+  logoUpdatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export type OfficeInput = Omit<Office, 'id' | 'createdAt' | 'updatedAt'>;
+export type OfficeInput = Omit<Office, 'id' | 'createdAt' | 'updatedAt' | 'logoPath' | 'logoUpdatedAt'> &
+  Partial<Pick<Office, 'logoPath' | 'logoUpdatedAt'>>;
 export type OfficePatch = Partial<Omit<OfficeInput, 'code'>>;
+
+/** ما يراه تطبيق المكتب عن مكتبه (مع الدخول، ومع `GET /license`، وعبر حدث SSE `office`). */
+export interface OfficePublicInfo {
+  id: string;
+  code: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  /** رابط نسبي إلى جذر الخادم (`/uploads/offices/...`) أو null. */
+  logoUrl: string | null;
+  /** طابع زمني (ms) يتغيّر مع كل رفع؛ null بلا لوغو. */
+  logoVersion: number | null;
+}
+
+export function officePublicInfo(o: Office): OfficePublicInfo {
+  return {
+    id: o.id,
+    code: o.code,
+    name: o.name,
+    address: o.address,
+    phone: o.phone,
+    logoUrl: o.logoPath ? `/${o.logoPath.replace(/^\/+/, '')}` : null,
+    logoVersion: o.logoPath && o.logoUpdatedAt ? o.logoUpdatedAt.getTime() : null,
+  };
+}
 
 /** أبجدية الكود: بلا محارف ملتبسة عند القراءة والكتابة اليدوية. */
 export const OFFICE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

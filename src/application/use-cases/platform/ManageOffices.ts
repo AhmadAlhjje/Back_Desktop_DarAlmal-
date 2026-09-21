@@ -154,6 +154,18 @@ export class ManageOffices {
   }
 
   /** إعادة توليد كود المكتب (ضاع الكود): الجلسات المفتوحة تستمر (التوكن بمعرّف المكتب)، والدخول التالي بالكود الجديد. */
+  /**
+   * لوغو المكتب من اللوحة (قرار المستخدم 2026-09-21): يُبدَّل متى شاء المالك — بخلاف التطبيق حيث
+   * يُعيَّن مرة واحدة. يعيد المسار السابق ليحذفه المستدعي من القرص.
+   */
+  async setLogo(id: string, logoPath: string | null): Promise<{ office: Office; previousPath: string | null }> {
+    const current = await this.offices.findById(id);
+    if (!current) throw new ApplicationError('OFFICE_NOT_FOUND', 'Office not found', 404);
+    const office = await this.offices.update(id, { logoPath, logoUpdatedAt: logoPath ? new Date() : null });
+    if (!office) throw new ApplicationError('OFFICE_NOT_FOUND', 'Office not found', 404);
+    return { office, previousPath: current.logoPath };
+  }
+
   async regenerateCode(id: string): Promise<Office> {
     if (!(await this.offices.findById(id))) throw new ApplicationError('OFFICE_NOT_FOUND', 'Office not found', 404);
     const office = await this.offices.setCode(id, await this.uniqueCode());

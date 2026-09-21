@@ -6,7 +6,7 @@ import type { TokenService } from '../../ports/services/TokenService.js';
 import { ApplicationError } from '../../errors/ApplicationError.js';
 import type { LicenseMonitor } from '../license/LicenseMonitor.js';
 import { licenseErrorFor } from '../license/licenseError.js';
-import { normalizeOfficeCode } from '../../../domain/entities/Office.js';
+import { normalizeOfficeCode, officePublicInfo } from '../../../domain/entities/Office.js';
 
 /**
  * تسجيل الدخول (تعدد المكاتب 2026-09-20): كود المكتب + اسم المستخدم + كلمة المرور.
@@ -46,7 +46,7 @@ export class Login {
         permissions: admin.permissions ?? [],
       },
       // اسم المكتب وعنوانه يحلّان محل «اسم/عنوان الشركة» في التطبيق (لا يعدّلهما المكتب).
-      office: { id: office.id, code: office.code, name: office.name, address: office.address, phone: office.phone },
+      office: officePublicInfo(office),
     };
   }
 }

@@ -13,6 +13,8 @@ export class OfficeModel extends Model {
   @Column(DataType.STRING(30)) declare phone: string | null;
   @Column(DataType.STRING(255)) declare address: string | null;
   @Column(DataType.TEXT) declare notes: string | null;
+  @Column(DataType.STRING(255)) declare logo_path: string | null;
+  @Column(DataType.DATE) declare logo_updated_at: Date | null;
   @Column(DataType.DATE) declare created_at: Date;
   @Column(DataType.DATE) declare updated_at: Date;
 }

@@ -56,7 +56,7 @@ import type { LicenseMonitor } from '../../application/use-cases/license/License
 import type { TenantScope } from '../../application/ports/services/TenantScope.js';
 import type { OfficeRepository } from '../../application/ports/repositories/OfficeRepository.js';
 import type { AdminRepository } from '../../application/ports/repositories/AdminRepository.js';
-import { normalizeOfficeCode } from '../../domain/entities/Office.js';
+import { normalizeOfficeCode, officePublicInfo } from '../../domain/entities/Office.js';
 import type { Logger } from '../../application/ports/services/Logger.js';
 import { formatChanges, trimAmount, type MovementChange } from '../../application/use-cases/movements/helpers.js';
 import type { ResetSystemData } from '../../application/use-cases/system/ResetSystemData.js';
@@ -136,7 +136,7 @@ export function createRoutes(deps: {
         success: true,
         data: {
           ...(await deps.licenseMonitor.current(office.id)),
-          office: { code: office.code, name: office.name, address: office.address, phone: office.phone },
+          office: officePublicInfo(office),
         },
       });
     }),
@@ -791,12 +791,16 @@ export function createRoutes(deps: {
     const unsubscribeLicense = deps.notificationHub.subscribeLicense(officeId, (state) => send('license', state));
     // حالة الحساب: تعطيل/تفعيل الإداري نفسه يصل لحظة حدوثه.
     const unsubscribeAccount = deps.notificationHub.subscribeAccount(req.auth!.adminId, (state) => send('account', state));
+    // معلومات المكتب (اللوغو من اللوحة…): الحالية عند الاتصال ثم كل تغيير لحظته.
+    void deps.offices.findById(officeId).then((office) => office && send('office', officePublicInfo(office)));
+    const unsubscribeOffice = deps.notificationHub.subscribeOffice(officeId, (info) => send('office', info));
     const heartbeat = setInterval(() => res.write(': ping\n\n'), 20_000);
     req.on('close', () => {
       clearInterval(heartbeat);
       unsubscribe();
       unsubscribeLicense();
       unsubscribeAccount();
+      unsubscribeOffice();
       deps.logger.info({ adminId: req.auth!.adminId }, 'notifications stream closed');
     });
   });
