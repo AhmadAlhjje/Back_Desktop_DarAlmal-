@@ -64,6 +64,8 @@ export interface ClientRepository {
 }
 export interface CurrencyRepository {
   findById(id: string): Promise<Currency | null>;
+  /** كل العملات (لكشف «كل العملات» — بلا ترقيم). */
+  findAll(): Promise<Currency[]>;
   findPage(page: number, limit: number): Promise<Page<Currency>>;
   create(input: Omit<Currency, 'id'>): Promise<Currency>;
   update(id: string, input: Partial<Omit<Currency, 'id'>>): Promise<Currency | null>;
@@ -196,6 +198,8 @@ export interface StatementPage extends JournalPage {
   opening: SideTotals;
   beforePage: SideTotals;
   period: SideTotals;
+  /** مجاميع الفترة لكل عملة — تُملأ عند كشف «كل العملات» فقط. */
+  periodByCurrency?: Array<{ currencyId: string; us: string; them: string }>;
 }
 export interface JournalRepository {
   /** قلب جهة كل قيد في الحركة (لنا ↔ علينا) في مكانه. */
@@ -203,7 +207,7 @@ export interface JournalRepository {
   createMany(entries: JournalEntry[]): Promise<void>;
   findByMovement(movementId: string): Promise<JournalEntry[]>;
   findPage(filters: JournalFilters): Promise<JournalPage>;
-  findStatementPage(filters: JournalFilters & { clientId: string; currencyId: string }): Promise<StatementPage>;
+  findStatementPage(filters: JournalFilters & { clientId: string; currencyId?: string }): Promise<StatementPage>;
 }
 export interface TransferRepository {
   create(input: Transfer): Promise<Transfer>;

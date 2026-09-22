@@ -20,7 +20,8 @@ export const journalQuerySchema = z
   .strict();
 export const statementQuerySchema = z
   .object({
-    currency_id: id,
+    /** غائب = كل العملات (كشف موحّد بعمود العملة، بلا رصيد جارٍ مختلط). */
+    currency_id: id.optional(),
     date_from: date.optional(),
     date_to: date.optional(),
     movement_type_id: id.optional(),

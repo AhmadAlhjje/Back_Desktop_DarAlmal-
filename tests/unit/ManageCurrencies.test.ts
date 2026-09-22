@@ -22,6 +22,7 @@ function make(current: Currency) {
   const repo = {
     findById: vi.fn().mockResolvedValue(current),
     findPage: vi.fn(),
+    findAll: vi.fn(async () => [current]),
     create: vi.fn(async (i: Omit<Currency, 'id'>) => ({ id: '9', ...i })),
     update: vi.fn(async (_id: string, i: Partial<Currency>) => ({ ...current, ...i })),
   };

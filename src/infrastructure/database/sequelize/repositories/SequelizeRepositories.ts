@@ -407,6 +407,10 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         const row = await CurrencyModel.findByPk(id, options);
         return row ? CurrencyMapper.toDomain(row) : null;
       },
+      async findAll() {
+        const rows = await CurrencyModel.findAll({ order: [['importance', 'DESC']], ...options });
+        return rows.map(CurrencyMapper.toDomain);
+      },
       async findPage(page, limit) {
         const r = await CurrencyModel.findAndCountAll({
           order: [['id_currency', 'DESC']],
@@ -835,12 +839,32 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             { us: '0', them: '0' },
           );
         }
+        // كشف «كل العملات»: مجاميع الفترة لكل عملة (الرصيد الجاري المختلط بلا معنى فلا يُحسب).
+        const periodByCurrency = filters.currencyId
+          ? undefined
+          : ((await JournalEntryModel.findAll({
+              attributes: [
+                'currency_id',
+                [fn('SUM', col('amount_us')), 'us'],
+                [fn('SUM', col('amount_them')), 'them'],
+              ],
+              where: periodWhere,
+              include: [{ model: MovementModel, as: 'movement', required: true, attributes: [], where: statementMovementWhere }],
+              group: ['currency_id'],
+              raw: true,
+              ...options,
+            })) as unknown as Array<{ currency_id: string; us: string | null; them: string | null }>).map((r) => ({
+              currencyId: String(r.currency_id),
+              us: String(r.us ?? '0'),
+              them: String(r.them ?? '0'),
+            }));
         return {
           rows: page.rows.map(toJournalItem),
           count: page.count,
           opening,
           beforePage,
           period: await sideTotals(periodWhere, statementMovementWhere),
+          ...(periodByCurrency && { periodByCurrency }),
         };
       },
     },
