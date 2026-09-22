@@ -34,6 +34,20 @@ describe('every client mutation notifies the admins', () => {
     expect(body).toContain("type: 'CLIENT'");
   });
 
+  // بلاغ المستخدم 2026-09-23: «كود العميل CL-... لا أريده أن يظهر في الإشعارات».
+  it.each(routes)('%s %s never puts the account code in the message', (method, path) => {
+    expect(handlerOf(method, path)).not.toContain('client.code');
+  });
+
+  // بلاغ المستخدم 2026-09-23: «بدور EMPLOYEE» ⇒ اسم الدور بالعربية.
+  it('the new-admin notification names the role in Arabic, not the raw enum', () => {
+    const body = handlerOf('post', '/admins');
+    expect(body).toContain('roleLabelAr(admin.role)');
+    expect(body).not.toContain('${admin.role}');
+    const labels = readFileSync(new URL('../../src/domain/enums/AdminRoleLabel.ts', import.meta.url), 'utf8');
+    for (const arabic of ['مدير', 'مشرف', 'محاسب', 'موظف', 'مشاهد']) expect(labels).toContain(arabic);
+  });
+
   it('the delete notification can name the account (fullName comes back from the use case)', () => {
     const useCase = readFileSync(new URL('../../src/application/use-cases/clients/ManageClients.ts', import.meta.url), 'utf8');
     expect(useCase).toContain('fullName: client.fullName');

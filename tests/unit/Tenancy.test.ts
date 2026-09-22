@@ -139,7 +139,8 @@ describe('Login: one-time office code → device key (2026-09-22)', () => {
     const tokens = { sign: vi.fn().mockReturnValue('tok'), verify: vi.fn() };
     const monitor = new LicenseMonitor(offices, { now: () => new Date() }, undefined, { cacheMs: 0, pollMs: 60_000 });
     const presence = { isActiveElsewhere: vi.fn().mockReturnValue(false) };
-    const login = new Login(offices, admins as never, hasher, tokens, monitor, scope, devices as never, presence, () => 'NEWC0DE9', () => 'k'.repeat(64));
+    const notice = { errorIfBlocking: async () => null };
+    const login = new Login(offices, admins as never, hasher, tokens, monitor, scope, devices as never, presence, notice, () => 'NEWC0DE9', () => 'k'.repeat(64));
     return { login, offices, tokens, devices, presence };
   };
 

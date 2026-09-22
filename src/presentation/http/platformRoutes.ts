@@ -8,6 +8,7 @@ import type { OfficeDeviceRepository } from '../../application/ports/repositorie
 import type { ManageOfficeAdmins } from '../../application/use-cases/platform/ManageOfficeAdmins.js';
 import type { ManageOffices } from '../../application/use-cases/platform/ManageOffices.js';
 import type { PlatformStatsRepository } from '../../application/ports/repositories/PlatformStatsRepository.js';
+import type { SystemNotice } from '../../application/use-cases/platform/SystemNotice.js';
 import { LICENSE_STATUSES } from '../../domain/entities/License.js';
 import { AdminRole } from '../../domain/enums/AdminRole.js';
 import { validate } from './middleware/validate.js';
@@ -75,6 +76,13 @@ export const createOfficeAdminSchema = z.object({
 });
 export const resetPasswordSchema = z.object({ password: z.string().min(8).max(128) });
 
+/** إعلان المنصّة: رسالة المالك التي تُوقف كل التطبيقات عند تفعيلها (2026-09-23). */
+export const setNoticeSchema = z.object({
+  isActive: z.boolean(),
+  title: z.string().trim().max(150).nullable().optional(),
+  message: z.string().trim().max(2000),
+});
+
 /**
  * مسارات المنصّة `/platform/*` — تستهلكها لوحة التحكم فقط (مفتاح `X-Platform-Key`)، وتعمل عبر
  * كل المكاتب عمداً: إنشاء المكاتب وتوليد أكوادها، الترخيص، الإداريون، والإحصاءات.
@@ -87,9 +95,28 @@ export function createPlatformRoutes(deps: {
   licenseMonitor: LicenseMonitor;
   notificationHub: NotificationHub;
   officeDevices: OfficeDeviceRepository;
+  systemNotice: SystemNotice;
 }) {
   const router = Router();
   router.use(platformAuth(deps.platformApiKey));
+
+  /**
+   * إعلان المنصّة: يُكتب هنا ويُفعَّل، فتتوقف كل التطبيقات عند الإقلاع/الدخول التالي وتُعرض
+   * الرسالة مع بيانات الدعم، ولا تعود للعمل إلا بإلغائه من هنا (قرار المستخدم 2026-09-23).
+   */
+  router.get(
+    '/notice',
+    asyncRoute(async (_req, res) => {
+      res.json({ success: true, data: await deps.systemNotice.current() });
+    }),
+  );
+  router.put(
+    '/notice',
+    validate(setNoticeSchema),
+    asyncRoute(async (req, res) => {
+      res.json({ success: true, data: await deps.systemNotice.set(req.body) });
+    }),
+  );
 
   router.get(
     '/overview',

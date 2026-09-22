@@ -13,6 +13,9 @@ import { createJournalMovementSchema } from './validators/journalMovementSchemas
 import type { CreateReceiptPayment } from '../../application/use-cases/movements/CreateReceiptPayment.js';
 import type { CreateExchange } from '../../application/use-cases/movements/CreateExchange.js';
 import { ReceiptPaymentType } from '../../domain/enums/ReceiptPaymentType.js';
+import { roleLabelAr } from '../../domain/enums/AdminRoleLabel.js';
+import { noticeBlocks } from '../../domain/entities/PlatformNotice.js';
+import type { SystemNotice } from '../../application/use-cases/platform/SystemNotice.js';
 import { receiptPaymentSchema } from './validators/receiptPaymentSchemas.js';
 import { exchangeSchema } from './validators/exchangeSchemas.js';
 import type { GetJournal } from '../../application/use-cases/journal/GetJournal.js';
@@ -124,9 +127,30 @@ export function createRoutes(deps: {
   resetSystemData: ResetSystemData;
   deleteOwnAccount: DeleteOwnAccount;
   changeOwnPassword: ChangeOwnPassword;
+  systemNotice: SystemNotice;
   tokens: TokenService;
 }) {
   const router = Router();
+  /**
+   * إعلان المنصّة (قرار المستخدم 2026-09-23) — بلا مصادقة: يستعلمه التطبيق **عند الإقلاع**
+   * (وكل 30 ثانية وهو مقفل) فقط. لا يُفحص في `authenticate` عمداً: من كان داخل التطبيق يُكمل
+   * عمله ولا تظهر له الرسالة حتى يخرج ويعود أو يسجّل دخولاً جديداً.
+   */
+  router.get(
+    '/system/notice',
+    asyncRoute(async (_req, res) => {
+      const notice = await deps.systemNotice.current();
+      res.json({
+        success: true,
+        data: {
+          active: noticeBlocks(notice),
+          title: notice.title,
+          message: notice.message,
+          updatedAt: notice.updatedAt,
+        },
+      });
+    }),
+  );
   // حالة ترخيص مكتب — بلا مصادقة (شاشة القفل تستعلم قبل الدخول وبعده): `?office=<الكود>`.
   router.get(
     '/license',
@@ -179,7 +203,7 @@ export function createRoutes(deps: {
     validate(createAdminSchema),
     asyncRoute(async (req, res) => {
       const admin = await deps.manageAdmins.create(req.body);
-      notifyAs(req.auth?.adminId, { type: 'ADMIN', title: 'إداري جديد', message: `تمت إضافة الإداري «${admin.fullName}» بدور ${admin.role}.` });
+      notifyAs(req.auth?.adminId, { type: 'ADMIN', title: 'إداري جديد', message: `تمت إضافة الإداري «${admin.fullName}» بدور ${roleLabelAr(admin.role)}.` });
       res.status(201).json({ success: true, data: admin });
     }),
   );
@@ -246,7 +270,7 @@ export function createRoutes(deps: {
       notifyAs(req.auth?.adminId, {
         type: 'CLIENT',
         title: client.accountType === 'BOX' ? `صندوق جديد: ${client.fullName}` : `عميل جديد: ${client.fullName}`,
-        message: `تم تسجيل الحساب «${client.fullName}» (${client.code}).`,
+        message: `تم تسجيل الحساب «${client.fullName}».`,
       });
       res.status(201).json({ success: true, data: client });
     }),

@@ -12,3 +12,4 @@ export { ExchangeMovementModel } from './ExchangeMovementModel.js';
 export { NotificationModel } from './NotificationModel.js';
 export { OfficeModel } from './OfficeModel.js';
 export { OfficeDeviceModel } from './OfficeDeviceModel.js';
+export { PlatformNoticeModel } from './PlatformNoticeModel.js';

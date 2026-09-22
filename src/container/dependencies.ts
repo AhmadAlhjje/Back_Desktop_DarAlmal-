@@ -39,6 +39,8 @@ import { SequelizeOfficeRepository } from '../infrastructure/database/sequelize/
 import { SequelizePlatformStatsRepository } from '../infrastructure/database/sequelize/repositories/SequelizePlatformStatsRepository.js';
 import { tenantScope } from '../infrastructure/tenancy/TenantContext.js';
 import { SequelizeOfficeDeviceRepository } from '../infrastructure/database/sequelize/repositories/SequelizeOfficeDeviceRepository.js';
+import { SequelizePlatformNoticeRepository } from '../infrastructure/database/sequelize/repositories/SequelizePlatformNoticeRepository.js';
+import { SystemNotice } from '../application/use-cases/platform/SystemNotice.js';
 import { ManageOffices } from '../application/use-cases/platform/ManageOffices.js';
 import { ManageOfficeAdmins } from '../application/use-cases/platform/ManageOfficeAdmins.js';
 const logger = new PinoLogger(env.LOG_LEVEL);
@@ -53,6 +55,8 @@ const notificationHub = new NotificationHub();
 const offices = new SequelizeOfficeRepository();
 const officeDevices = new SequelizeOfficeDeviceRepository();
 const platformStats = new SequelizePlatformStatsRepository();
+// إعلان المنصّة: يُقرأ عند الإقلاع وتسجيل الدخول فقط (لا يقفل جلسة جارية) — قرار المستخدم 2026-09-23.
+const systemNotice = new SystemNotice(new SequelizePlatformNoticeRepository(), 5_000, logger);
 const licenseMonitor = new LicenseMonitor(offices, clock, logger, {
   cacheMs: 5_000,
   pollMs: env.LICENSE_POLL_SECONDS * 1_000,
@@ -61,7 +65,7 @@ licenseMonitor.subscribe((officeId, state) => notificationHub.publishLicense(off
 export const dependencies = {
   logger,
   tokens,
-  login: new Login(offices, repositories.adminRepository, hasher, tokens, licenseMonitor, tenantScope, officeDevices, notificationHub),
+  login: new Login(offices, repositories.adminRepository, hasher, tokens, licenseMonitor, tenantScope, officeDevices, notificationHub, systemNotice),
   manageAdmins: new ManageAdmins(repositories.adminRepository, hasher),
   manageMovementTypes: new ManageMovementTypes(repositories.movementTypeRepository),
   createClient: new CreateClient(repositories.clientRepository, repositories.clientGroupRepository),
@@ -95,6 +99,7 @@ export const dependencies = {
   admins: repositories.adminRepository,
   officeDevices,
   platformStats,
+  systemNotice,
   platformApiKey: env.PLATFORM_API_KEY,
   manageOffices: new ManageOffices(offices, platformStats, uow, tenantScope, hasher),
   manageOfficeAdmins: new ManageOfficeAdmins(offices, repositories.adminRepository, hasher, tenantScope),

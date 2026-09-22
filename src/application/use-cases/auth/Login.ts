@@ -9,6 +9,7 @@ import type { TokenService } from '../../ports/services/TokenService.js';
 import { ApplicationError } from '../../errors/ApplicationError.js';
 import type { LicenseMonitor } from '../license/LicenseMonitor.js';
 import { licenseErrorFor } from '../license/licenseError.js';
+import type { SystemNotice } from '../platform/SystemNotice.js';
 import { normalizeOfficeCode, officePublicInfo, type Office } from '../../../domain/entities/Office.js';
 import { generateOfficeCode } from '../platform/ManageOffices.js';
 
@@ -41,11 +42,16 @@ export class Login {
     private scope: TenantScope,
     private devices: OfficeDeviceRepository,
     private presence: SessionPresence = { isActiveElsewhere: () => false },
+    private notice: Pick<SystemNotice, 'errorIfBlocking'> = { errorIfBlocking: async () => null },
     private codeGenerator: () => string = generateOfficeCode,
     private keyGenerator: () => string = () => randomBytes(32).toString('hex'),
   ) {}
 
   async execute(input: LoginInput) {
+    // إعلان المنصّة (2026-09-23): مفعَّل ⇒ لا دخول جديد إطلاقاً، وتظهر رسالة المالك في التطبيق.
+    const noticeError = await this.notice.errorIfBlocking();
+    if (noticeError) throw noticeError;
+
     const { office, enrolling, deviceId: knownDevice } = await this.resolveOffice(input);
     const licenseError = licenseErrorFor(await this.license.current(office.id));
     if (licenseError) throw licenseError;
