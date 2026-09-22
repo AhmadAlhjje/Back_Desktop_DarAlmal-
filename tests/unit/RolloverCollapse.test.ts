@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GetClientStatement } from '../../src/application/use-cases/journal/GetClientStatement.js';
+import { statementQuerySchema } from '../../src/presentation/http/validators/querySchemas.js';
 import { EntrySide } from '../../src/domain/enums/EntrySide.js';
 
 /**
@@ -128,5 +129,16 @@ describe('collapsing everything before the rollover into one line', () => {
     expect(result.rolledOver!.byCurrency).toEqual([
       { currency: { id: '1', code: 'USD', name: 'دولار', symbol: '$' }, count: 5, totalUs: '1000', totalThem: '250', balance: '750.0000000000' },
     ]);
+  });
+});
+
+/** عقد الاستعلام: التطبيق يرسل هذه المفاتيح حرفياً — أي تغيير هنا يكسر الكشف (`.strict()`). */
+describe('statement query contract', () => {
+  it('accepts collapse_rollover and scope, and caps limit at 100', () => {
+    expect(statementQuerySchema.safeParse({ currency_id: '2', collapse_rollover: 'true', page: '1', limit: '100' }).success).toBe(true);
+    expect(statementQuerySchema.safeParse({ currency_id: '2', collapse_rollover: 'true', scope: 'ROLLED_OVER', limit: '100' }).success).toBe(true);
+    // بلاغ 2026-09-23: نافذة المراجعة كانت تطلب limit=200 فردّ الخادم «البيانات المُرسلة غير صالحة».
+    expect(statementQuerySchema.safeParse({ currency_id: '2', scope: 'ROLLED_OVER', limit: '200' }).success).toBe(false);
+    expect(statementQuerySchema.safeParse({ currency_id: '2', scope: 'OLD' }).success).toBe(false);
   });
 });
