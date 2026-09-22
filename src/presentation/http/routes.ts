@@ -324,7 +324,15 @@ export function createRoutes(deps: {
     authorize('client.update'),
     validate(secretClientSchema),
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.manageClients.setSecret(req.params.id, req.body.isSecret) });
+      const client = await deps.manageClients.setSecret(req.params.id, req.body.isSecret);
+      notifyAs(req.auth?.adminId, {
+        type: 'CLIENT',
+        title: `${client.isSecret ? 'تعيين حساب سرّي' : 'إلغاء السرّية'}: ${client.fullName}`,
+        message: client.isSecret
+          ? `أصبح الحساب «${client.fullName}» سرّياً ولا يظهر إلا لدور المدير.`
+          : `أُلغيت سرّية الحساب «${client.fullName}» فصار ظاهراً للجميع.`,
+      });
+      res.json({ success: true, data: client });
     }),
   );
   router.patch(
@@ -346,7 +354,13 @@ export function createRoutes(deps: {
     authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins, deps.notificationHub),
     authorize('client.update'),
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.manageClients.delete(req.params.id) });
+      const result = await deps.manageClients.delete(req.params.id);
+      notifyAs(req.auth?.adminId, {
+        type: 'CLIENT',
+        title: `حذف حساب: ${result.fullName}`,
+        message: `تم حذف الحساب «${result.fullName}» نهائياً (لا حركات عليه).`,
+      });
+      res.json({ success: true, data: result });
     }),
   );
   router.get(

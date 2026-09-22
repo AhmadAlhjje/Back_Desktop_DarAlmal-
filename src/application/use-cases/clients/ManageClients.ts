@@ -75,7 +75,8 @@ export class ManageClients {
     if ((await this.clients.countJournalEntries(id)) > 0)
       throw new ApplicationError('CLIENT_HAS_MOVEMENTS', 'Client has journal entries and cannot be deleted', 409);
     await this.clients.delete(id);
-    return { deleted: true, id };
+    // اسم الحساب يعود مع النتيجة ليُذكر في الإشعار (قرار المستخدم 2026-09-22: إشعار لكل إجراء).
+    return { deleted: true, id, fullName: client.fullName };
   }
   async cashBox() {
     return this.clients.findCashBox();

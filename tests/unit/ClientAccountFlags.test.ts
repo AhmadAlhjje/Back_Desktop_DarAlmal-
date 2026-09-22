@@ -81,7 +81,8 @@ describe('ManageClients — delete / cash box / rollover', () => {
       countJournalEntries: vi.fn().mockResolvedValue(0),
       delete: del,
     });
-    await expect(m.delete('7')).resolves.toEqual({ deleted: true, id: '7' });
+    // الاسم يعود مع النتيجة ليُذكر في إشعار الحذف (2026-09-22)
+    await expect(m.delete('7')).resolves.toEqual({ deleted: true, id: '7', fullName: 'عميل' });
     expect(del).toHaveBeenCalledWith('7');
   });
   it('archived accounts cannot become the cash box', async () => {
