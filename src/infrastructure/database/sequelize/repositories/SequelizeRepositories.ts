@@ -788,15 +788,17 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       },
       async findStatementPage(filters) {
         const periodWhere = journalWhere(filters);
+        // fromAt/beforeAt: لحظة التدوير بدقّة الثانية (طيّ ما قبلها في سطر واحد) — تُجمع مع حدود اليوم.
+        const createdAt = {
+          ...(filters.dateFrom && { [Op.gte]: `${filters.dateFrom} 00:00:00` }),
+          ...(filters.dateTo && { [Op.lte]: `${filters.dateTo} 23:59:59` }),
+          ...(filters.fromAt && { [Op.gte]: filters.fromAt }),
+          ...(filters.beforeAt && { [Op.lt]: filters.beforeAt }),
+        };
         const statementMovementWhere = {
           status: 'POSTED',
           ...(filters.movementTypeId && { movement_type_id: filters.movementTypeId }),
-          ...((filters.dateFrom || filters.dateTo) && {
-            created_at: {
-              ...(filters.dateFrom && { [Op.gte]: `${filters.dateFrom} 00:00:00` }),
-              ...(filters.dateTo && { [Op.lte]: `${filters.dateTo} 23:59:59` }),
-            },
-          }),
+          ...(Object.getOwnPropertySymbols(createdAt).length > 0 && { created_at: createdAt }),
         };
         // الأحدث أولاً؛ الرصيد الجاري يُحسب في use case انطلاقاً من الختامي نزولاً.
         const page = await JournalEntryModel.findAndCountAll({
@@ -811,10 +813,12 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           distinct: true,
           ...options,
         });
-        const opening = filters.dateFrom
+        // الرصيد الافتتاحي = كل ما قبل بداية الفترة (أدقّ حدّ متاح: لحظة التدوير إن وُجدت).
+        const openingBefore = filters.fromAt ?? (filters.dateFrom ? `${filters.dateFrom} 00:00:00` : null);
+        const opening = openingBefore
           ? await sideTotals(
               { client_id: filters.clientId, currency_id: filters.currencyId },
-              { status: 'POSTED', created_at: { [Op.lt]: `${filters.dateFrom} 00:00:00` } },
+              { status: 'POSTED', created_at: { [Op.lt]: openingBefore } },
             )
           : { us: '0', them: '0' };
         let beforePage = { us: '0', them: '0' };
@@ -865,6 +869,44 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           beforePage,
           period: await sideTotals(periodWhere, statementMovementWhere),
           ...(periodByCurrency && { periodByCurrency }),
+        };
+      },
+      async rolloverSummary({ clientId, currencyId, before }) {
+        // سطر «ما قبل التدوير»: مجاميع وعدد القيود الأقدم من لحظة التدوير (ولكل عملة عند كشف كل العملات).
+        const where = { client_id: clientId, ...(currencyId && { currency_id: currencyId }) };
+        const movementFilter = { status: 'POSTED', created_at: { [Op.lt]: before } };
+        const [totals, count] = await Promise.all([
+          sideTotals(where, movementFilter),
+          JournalEntryModel.count({
+            where,
+            include: [{ model: MovementModel, as: 'movement', required: true, attributes: [], where: movementFilter }],
+            ...options,
+          }),
+        ]);
+        if (currencyId) return { count, us: totals.us, them: totals.them };
+        const perCurrency = (await JournalEntryModel.findAll({
+          attributes: [
+            'currency_id',
+            [fn('SUM', col('amount_us')), 'us'],
+            [fn('SUM', col('amount_them')), 'them'],
+            [fn('COUNT', col('id_day')), 'rows'],
+          ],
+          where,
+          include: [{ model: MovementModel, as: 'movement', required: true, attributes: [], where: movementFilter }],
+          group: ['currency_id'],
+          raw: true,
+          ...options,
+        })) as unknown as Array<{ currency_id: string; us: string | null; them: string | null; rows: number | string }>;
+        return {
+          count,
+          us: totals.us,
+          them: totals.them,
+          byCurrency: perCurrency.map((r) => ({
+            currencyId: String(r.currency_id),
+            us: String(r.us ?? '0'),
+            them: String(r.them ?? '0'),
+            count: Number(r.rows ?? 0),
+          })),
         };
       },
     },
@@ -1058,6 +1100,30 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         const clientGroups = await del('DELETE FROM client_groups WHERE office_id = :officeId');
         await del('UPDATE clients SET archived_at = NULL, last_rollover_at = NULL WHERE is_system = 1 AND office_id = :officeId');
         return { journalEntries, movements, notifications, clients, clientGroups };
+      },
+      async purgeOffice(officeId) {
+        // حذف مكتب كاملاً (لوحة التحكم 2026-09-23): نفس ترتيب التصفير ثم الحسابات النظامية
+        // والعملات والإداريون وأجهزة المكتب، وأخيراً صفّ المكتب. المعرّف صريح (لا سياق مستأجر).
+        const del = async (sql: string): Promise<number> => {
+          const [, meta] = await sequelize.query(sql, { ...options, replacements: { officeId } });
+          const affected = (meta as { affectedRows?: number } | number | undefined) ?? 0;
+          return typeof affected === 'number' ? affected : (affected.affectedRows ?? 0);
+        };
+        const inOffice = 'movement_id IN (SELECT id_movement FROM movements WHERE office_id = :officeId)';
+        const journalEntries = await del('DELETE FROM journal_entries WHERE office_id = :officeId');
+        await del(`DELETE FROM transfer_movements WHERE ${inOffice}`);
+        await del(`DELETE FROM settlement_movements WHERE ${inOffice}`);
+        await del(`DELETE FROM multi_movements WHERE ${inOffice}`);
+        await del(`DELETE FROM exchange_movements WHERE ${inOffice}`);
+        const notifications = await del('DELETE FROM notifications WHERE office_id = :officeId');
+        const movements = await del('DELETE FROM movements WHERE office_id = :officeId');
+        const clients = await del('DELETE FROM clients WHERE office_id = :officeId');
+        const clientGroups = await del('DELETE FROM client_groups WHERE office_id = :officeId');
+        const currencies = await del('DELETE FROM currencies WHERE office_id = :officeId');
+        const admins = await del('DELETE FROM admins WHERE office_id = :officeId');
+        const devices = await del('DELETE FROM office_devices WHERE office_id = :officeId');
+        await del('DELETE FROM offices WHERE id_office = :officeId');
+        return { journalEntries, movements, notifications, clients, clientGroups, currencies, admins, devices };
       },
     },
     notificationRepository: {

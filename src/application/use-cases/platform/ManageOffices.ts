@@ -11,6 +11,7 @@ import { AdminRole } from '../../../domain/enums/AdminRole.js';
 import { ApplicationError } from '../../errors/ApplicationError.js';
 import type { OfficeRepository } from '../../ports/repositories/OfficeRepository.js';
 import type { OfficeStats, PlatformStatsRepository } from '../../ports/repositories/PlatformStatsRepository.js';
+import type { OfficePurgeSummary } from '../../ports/repositories/types.js';
 import type { PasswordHasher } from '../../ports/services/PasswordHasher.js';
 import type { TenantScope } from '../../ports/services/TenantScope.js';
 import type { UnitOfWork } from '../../ports/services/UnitOfWork.js';
@@ -136,6 +137,21 @@ export class ManageOffices {
       });
       return office;
     });
+  }
+
+  /**
+   * حذف مكتب بكل بياناته (قرار المستخدم 2026-09-23: «يمكنني حذف مكتب معين لكن تظهر نافذة تطلب
+   * التأكيد لأنه شيء مهم»). التأكيد إلزامي: كود المكتب نفسه يُكتب في اللوحة ويُرسل هنا، فلا يُحذف
+   * مكتب بالخطأ. العملية لا تُستردّ: الحركات والقيود والعملاء والعملات والإداريون والأجهزة تُحذف
+   * كلها في معاملة واحدة.
+   */
+  async delete(id: string, confirmation: string): Promise<{ office: Office; summary: OfficePurgeSummary }> {
+    const office = await this.offices.findById(id);
+    if (!office) throw new ApplicationError('OFFICE_NOT_FOUND', 'Office not found', 404);
+    if (normalizeOfficeCode(confirmation ?? '') !== normalizeOfficeCode(office.code))
+      throw new ApplicationError('OFFICE_DELETE_CONFIRMATION_INVALID', 'اكتب كود المكتب بالضبط لتأكيد الحذف', 422);
+    const summary = await this.uow.execute((r) => r.systemRepository.purgeOffice(office.id));
+    return { office, summary };
   }
 
   async update(id: string, patch: OfficePatch): Promise<Office> {

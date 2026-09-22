@@ -75,6 +75,8 @@ export const createOfficeAdminSchema = z.object({
   role: z.nativeEnum(AdminRole).optional(),
 });
 export const resetPasswordSchema = z.object({ password: z.string().min(8).max(128) });
+/** حذف مكتب: كود المكتب نفسه يُكتب للتأكيد (2026-09-23). */
+export const deleteOfficeSchema = z.object({ confirm: z.string().trim().min(1).max(32) });
 
 /** إعلان المنصّة: رسالة المالك التي تُوقف كل التطبيقات عند تفعيلها (2026-09-23). */
 export const setNoticeSchema = z.object({
@@ -151,6 +153,18 @@ export function createPlatformRoutes(deps: {
     validate(updateOfficeSchema),
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.manageOffices.update(req.params.id, req.body) });
+    }),
+  );
+  // حذف مكتب بكل بياناته (2026-09-23): لا يُنفَّذ إلا بكود المكتب نفسه في `confirm` (لوحة التحكم
+  // تطلبه في نافذة تأكيد). لوغو المكتب يُحذف من القرص، والمراقب يُحدَّث فتُقفل أجهزته فوراً.
+  router.delete(
+    '/offices/:id',
+    validate(deleteOfficeSchema),
+    asyncRoute(async (req, res) => {
+      const { office, summary } = await deps.manageOffices.delete(req.params.id, req.body.confirm);
+      await removeLogoFile(office.logoPath);
+      await deps.licenseMonitor.refresh();
+      res.json({ success: true, data: { deleted: true, office: { id: office.id, code: office.code, name: office.name }, summary } });
     }),
   );
   router.put(

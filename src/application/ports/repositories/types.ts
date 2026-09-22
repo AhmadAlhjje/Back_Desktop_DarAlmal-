@@ -168,6 +168,13 @@ export interface MovementRepository {
 export interface JournalFilters {
   dateFrom?: string;
   dateTo?: string;
+  /**
+   * حدّان زمنيّان دقيقان (ISO) لطيّ ما قبل «تدوير الأرصدة» (2026-09-23): `fromAt` = القيود من
+   * لحظة التدوير فصاعداً، `beforeAt` = القيود الأقدم منها (المطويّة) — بخلاف dateFrom/dateTo
+   * اللذين يعملان بدقّة اليوم فقط.
+   */
+  fromAt?: string;
+  beforeAt?: string;
   clientId?: string;
   currencyId?: string;
   movementTypeId?: string;
@@ -208,6 +215,8 @@ export interface JournalRepository {
   findByMovement(movementId: string): Promise<JournalEntry[]>;
   findPage(filters: JournalFilters): Promise<JournalPage>;
   findStatementPage(filters: JournalFilters & { clientId: string; currencyId?: string }): Promise<StatementPage>;
+  /** مجاميع القيود الأقدم من لحظة (التدوير) — سطر واحد مجمَّع بدل عرضها كلها (2026-09-23). */
+  rolloverSummary(params: { clientId: string; currencyId?: string; before: string }): Promise<RolloverSummary>;
 }
 export interface TransferRepository {
   create(input: Transfer): Promise<Transfer>;
@@ -233,6 +242,13 @@ export interface NotificationRepository {
   countUnread(adminId: string): Promise<number>;
   markAllRead(adminId: string): Promise<number>;
 }
+/** مجاميع ما قبل التدوير: سطر واحد يجمع «مدين لنا» و«دائن علينا» (ولكل عملة عند كشف كل العملات). */
+export interface RolloverSummary {
+  count: number;
+  us: string;
+  them: string;
+  byCurrency?: Array<{ currencyId: string; us: string; them: string; count: number }>;
+}
 /** ملخص تصفير البيانات (عدد الصفوف المحذوفة لكل جدول). */
 export interface ResetSummary {
   journalEntries: number;
@@ -241,9 +257,20 @@ export interface ResetSummary {
   clients: number;
   clientGroups: number;
 }
+/** ملخص حذف مكتب كاملاً (عدد الصفوف المحذوفة لكل جدول). */
+export interface OfficePurgeSummary extends ResetSummary {
+  currencies: number;
+  admins: number;
+  devices: number;
+}
 export interface SystemRepository {
   /** يحذف كل البيانات التجارية (الحركات وقيودها والإشعارات والعملاء غير النظاميين ومجموعاتهم) داخل المعاملة الجارية. */
   resetBusinessData(): Promise<ResetSummary>;
+  /**
+   * يحذف مكتباً بكل بياناته (قرار المستخدم 2026-09-23: حذف مكتب من لوحة التحكم) داخل المعاملة
+   * الجارية وبالترتيب الذي تفرضه قيود RESTRICT. غير مقيّد بسياق المكتب: المعرّف صريح.
+   */
+  purgeOffice(officeId: string): Promise<OfficePurgeSummary>;
 }
 export interface Repositories {
   /** المكاتب — غير مقيّد بسياق مكتب. */

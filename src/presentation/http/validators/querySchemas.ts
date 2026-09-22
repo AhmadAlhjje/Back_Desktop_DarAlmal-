@@ -25,6 +25,10 @@ export const statementQuerySchema = z
     date_from: date.optional(),
     date_to: date.optional(),
     movement_type_id: id.optional(),
+    /** طيّ ما قبل «تدوير الأرصدة» في سطر واحد (2026-09-23). */
+    collapse_rollover: z.enum(['true', 'false']).optional(),
+    /** ROLLED_OVER = العمليات المطويّة نفسها، للمراجعة فقط. */
+    scope: z.enum(['CURRENT', 'ROLLED_OVER']).optional(),
     ...pagination,
   })
   .strict();

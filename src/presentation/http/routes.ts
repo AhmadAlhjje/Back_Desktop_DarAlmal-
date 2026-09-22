@@ -709,6 +709,9 @@ export function createRoutes(deps: {
           dateFrom: q.date_from,
           dateTo: q.date_to,
           movementTypeId: q.movement_type_id,
+          // طيّ ما قبل التدوير في سطر واحد، و`scope=ROLLED_OVER` يفتح المطويّ للمراجعة (2026-09-23).
+          collapseRollover: q.collapse_rollover === 'true',
+          scope: q.scope,
           page: q.page,
           limit: q.limit,
         }),
