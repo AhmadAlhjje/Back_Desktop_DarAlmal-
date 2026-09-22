@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { effectiveLicenseStatus, toLicenseState, type LicenseFields } from '../../src/domain/entities/License.js';
+import { effectiveLicenseStatus, toLicenseState, type LicenseFields, movementLimitReached } from '../../src/domain/entities/License.js';
 import { LicenseMonitor } from '../../src/application/use-cases/license/LicenseMonitor.js';
-import { licenseErrorFor } from '../../src/application/use-cases/license/licenseError.js';
+import { licenseErrorFor, movementLimitErrorFor } from '../../src/application/use-cases/license/licenseError.js';
 import { ApplicationError } from '../../src/application/errors/ApplicationError.js';
 import type { OfficeRepository } from '../../src/application/ports/repositories/OfficeRepository.js';
 import type { Office } from '../../src/domain/entities/Office.js';
@@ -30,6 +30,7 @@ const repoOf = (list: () => Office[]): OfficeRepository => ({
   create: vi.fn(),
   update: vi.fn(),
   setCode: vi.fn(),
+  resetMovementsUsed: vi.fn(),
   licenseSnapshot: vi.fn(async () =>
     list().map(({ id, status, expiresAt, message, movementLimit, movementsUsed }) => ({ id, status, expiresAt, message, movementLimit, movementsUsed })),
   ),
@@ -41,24 +42,22 @@ describe('effectiveLicenseStatus', () => {
     expect(effectiveLicenseStatus(fields(), now)).toBe('ACTIVE');
   });
 
-  // حد الحركات (قرار المستخدم 2026-09-22): بلوغه يقفل كالإيقاف؛ بلا حد لا أثر؛ رفع الحد يفتح وحده.
-  it('LIMIT_REACHED when the additions counter reaches the limit; unlimited (null) never locks', () => {
-    expect(effectiveLicenseStatus(fields({ movementLimit: 100, movementsUsed: 99 }), now)).toBe('ACTIVE');
-    expect(effectiveLicenseStatus(fields({ movementLimit: 100, movementsUsed: 100 }), now)).toBe('LIMIT_REACHED');
-    expect(effectiveLicenseStatus(fields({ movementLimit: 100, movementsUsed: 250 }), now)).toBe('LIMIT_REACHED');
-    expect(effectiveLicenseStatus(fields({ movementLimit: null, movementsUsed: 1_000_000 }), now)).toBe('ACTIVE');
-    expect(effectiveLicenseStatus(fields({ movementLimit: 300, movementsUsed: 250 }), now)).toBe('ACTIVE');
-    // الإيقاف/الانتهاء لهما الأولوية على الحد
-    expect(effectiveLicenseStatus(fields({ status: 'SUSPENDED', movementLimit: 1, movementsUsed: 5 }), now)).toBe('SUSPENDED');
+  // حد الحركات (قرار المستخدم 2026-09-22): لا يغيّر حالة الترخيص ولا يقفل التطبيق — يمنع الإضافة فقط.
+  it('the movement limit never changes the effective status; unlimited (null) never blocks', () => {
+    expect(effectiveLicenseStatus(fields({ movementLimit: 100, movementsUsed: 250 }), now)).toBe('ACTIVE');
+    expect(movementLimitReached(fields({ movementLimit: 100, movementsUsed: 99 }))).toBe(false);
+    expect(movementLimitReached(fields({ movementLimit: 100, movementsUsed: 100 }))).toBe(true);
+    expect(movementLimitReached(fields({ movementLimit: null, movementsUsed: 1_000_000 }))).toBe(false);
   });
 
-  it('licenseErrorFor maps LIMIT_REACHED to 403 LICENSE_LIMIT_REACHED with the counters in details', () => {
+  it('movementLimitErrorFor blocks additions only (403 LICENSE_LIMIT_REACHED with counters); licenseErrorFor stays null', () => {
     const state = toLicenseState(fields({ movementLimit: 10, movementsUsed: 10 }), now);
-    const error = licenseErrorFor(state)!;
+    expect(licenseErrorFor(state)).toBeNull();
+    const error = movementLimitErrorFor(state)!;
     expect(error.code).toBe('LICENSE_LIMIT_REACHED');
     expect(error.status).toBe(403);
-    expect(error.details).toMatchObject({ status: 'LIMIT_REACHED', movementLimit: 10, movementsUsed: 10 });
-    expect(licenseErrorFor(toLicenseState(fields({ movementLimit: 11, movementsUsed: 10 }), now))).toBeNull();
+    expect(error.details).toMatchObject({ movementLimit: 10, movementsUsed: 10 });
+    expect(movementLimitErrorFor(toLicenseState(fields({ movementLimit: 11, movementsUsed: 10 }), now))).toBeNull();
   });
   it('ACTIVE past its expiry becomes EXPIRED automatically', () => {
     expect(effectiveLicenseStatus(fields({ expiresAt: at('2026-09-20T11:59:59Z') }), now)).toBe('EXPIRED');

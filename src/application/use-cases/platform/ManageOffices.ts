@@ -175,6 +175,13 @@ export class ManageOffices {
     return { office, previousPath: current.logoPath };
   }
 
+  /** تصفير عدّاد الحركات المضافة (قرار المستخدم 2026-09-22: من اللوحة فقط، لا من التطبيق أبداً). */
+  async resetMovementsUsed(id: string): Promise<Office> {
+    const office = await this.offices.resetMovementsUsed(id);
+    if (!office) throw new ApplicationError('OFFICE_NOT_FOUND', 'Office not found', 404);
+    return office;
+  }
+
   async regenerateCode(id: string): Promise<Office> {
     if (!(await this.offices.findById(id))) throw new ApplicationError('OFFICE_NOT_FOUND', 'Office not found', 404);
     const office = await this.offices.setCode(id, await this.uniqueCode());

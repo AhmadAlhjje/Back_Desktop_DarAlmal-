@@ -3,13 +3,12 @@
  * مالك النظام من لوحة التحكم. أي حالة غير `ACTIVE` تقفل التطبيق كاملاً لذلك المكتب.
  *
  * حد الحركات (قرار المستخدم 2026-09-22): `movementLimit` (null = بلا حد) مقابل `movementsUsed` (عدّاد
- * الإضافات فقط)؛ بلوغه يعطي الحالة الفعلية `LIMIT_REACHED` التي تقفل التطبيق كالإيقاف حتى يرفع
- * المالك الحد من اللوحة (فيزول القفل وحده).
+ * الإضافات فقط، يُصفَّر من اللوحة). بلوغه **لا يقفل التطبيق**: كل شيء يعمل (عرض/تعديل/حذف) ويُمنع
+ * إضافة حركة جديدة فقط (`403 LICENSE_LIMIT_REACHED` على مسارات الإضافة) حتى يرفع المالك الحد.
  */
 export type StoredLicenseStatus = 'ACTIVE' | 'SUSPENDED' | 'EXPIRED';
-export type LicenseStatus = StoredLicenseStatus | 'LIMIT_REACHED';
+export type LicenseStatus = StoredLicenseStatus;
 
-/** الحالات التي يكتبها المالك (LIMIT_REACHED حالة فعلية مشتقة لا تُخزَّن). */
 export const LICENSE_STATUSES: readonly StoredLicenseStatus[] = ['ACTIVE', 'SUSPENDED', 'EXPIRED'];
 
 /** حقول الترخيص كما يكتبها المالك (+ عدّاد الحركات الذي يزيده الخادم). */
@@ -36,14 +35,10 @@ export function movementLimitReached(license: Pick<LicenseFields, 'movementLimit
   return license.movementLimit !== null && license.movementLimit !== undefined && license.movementsUsed >= license.movementLimit;
 }
 
-/** الحالة الفعلية: موقوف/منتهٍ كما هما؛ `ACTIVE` مع تاريخ مضى = `EXPIRED`؛ `ACTIVE` وبلغ الحد = `LIMIT_REACHED`. */
-export function effectiveLicenseStatus(
-  license: Pick<LicenseFields, 'status' | 'expiresAt'> & Partial<Pick<LicenseFields, 'movementLimit' | 'movementsUsed'>>,
-  now: Date,
-): LicenseStatus {
+/** الحالة الفعلية: موقوف/منتهٍ كما هما؛ `ACTIVE` مع تاريخ مضى = `EXPIRED` (حد الحركات لا يغيّر الحالة). */
+export function effectiveLicenseStatus(license: Pick<LicenseFields, 'status' | 'expiresAt'>, now: Date): LicenseStatus {
   if (license.status !== 'ACTIVE') return license.status;
   if (license.expiresAt && license.expiresAt.getTime() <= now.getTime()) return 'EXPIRED';
-  if (movementLimitReached({ movementLimit: license.movementLimit ?? null, movementsUsed: license.movementsUsed ?? 0 })) return 'LIMIT_REACHED';
   return 'ACTIVE';
 }
 

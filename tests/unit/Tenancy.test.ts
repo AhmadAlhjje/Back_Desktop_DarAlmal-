@@ -124,6 +124,7 @@ describe('Login: one-time office code → device key (2026-09-22)', () => {
       create: vi.fn(),
       update: vi.fn(),
       setCode: vi.fn(async (_id: string, code: string) => (current = current ? { ...current, code } : null)),
+      resetMovementsUsed: vi.fn(),
       licenseSnapshot: vi.fn().mockResolvedValue([]),
     };
     const devices = {
@@ -235,7 +236,7 @@ describe('ManageOffices', () => {
       },
       current: () => null,
     };
-    const offices = { findByCode: vi.fn().mockResolvedValue(null), findById: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn(), setCode: vi.fn(), licenseSnapshot: vi.fn() };
+    const offices = { findByCode: vi.fn().mockResolvedValue(null), findById: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn(), setCode: vi.fn(), resetMovementsUsed: vi.fn(), licenseSnapshot: vi.fn() };
     const hasher = { hash: vi.fn().mockResolvedValue('HASH'), compare: vi.fn() };
     const stats = { statsFor: vi.fn().mockResolvedValue([]), overview: vi.fn() };
     const manage = new ManageOffices(offices, stats, uow as never, scopeSpy, hasher, () => 'ABCD2345');
@@ -256,7 +257,7 @@ describe('ManageOffices', () => {
   });
 
   it('retries on a code collision and fails loudly after 10 attempts', async () => {
-    const offices = { findByCode: vi.fn().mockResolvedValue(office()), findById: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn(), setCode: vi.fn(), licenseSnapshot: vi.fn() };
+    const offices = { findByCode: vi.fn().mockResolvedValue(office()), findById: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn(), setCode: vi.fn(), resetMovementsUsed: vi.fn(), licenseSnapshot: vi.fn() };
     const manage = new ManageOffices(offices, { statsFor: vi.fn(), overview: vi.fn() }, { execute: vi.fn() } as never, scope, { hash: vi.fn().mockResolvedValue('h'), compare: vi.fn() }, () => 'ABCD2345');
     await expect(manage.create({ name: 'x', admin: { fullName: 'a', password: 'secret123' } })).rejects.toMatchObject({ code: 'OFFICE_CODE_GENERATION_FAILED' });
     expect(offices.findByCode).toHaveBeenCalledTimes(10);
@@ -271,6 +272,7 @@ describe('ManageOffices', () => {
       create: vi.fn(),
       update: vi.fn(),
       setCode: vi.fn(async (_id: string, code: string) => ({ ...existing, code })),
+      resetMovementsUsed: vi.fn(),
       licenseSnapshot: vi.fn(),
     };
     const manage = new ManageOffices(offices, { statsFor: vi.fn(), overview: vi.fn() }, { execute: vi.fn() } as never, scope, { hash: vi.fn(), compare: vi.fn() }, () => 'NEWC0DE7'.replace('0', 'Q'));
@@ -282,7 +284,7 @@ describe('ManageOffices', () => {
   });
 
   it('setLicense updates status/expiry/message and 404s for unknown offices', async () => {
-    const offices = { findByCode: vi.fn(), findById: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn().mockResolvedValue(null), setCode: vi.fn(), licenseSnapshot: vi.fn() };
+    const offices = { findByCode: vi.fn(), findById: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn().mockResolvedValue(null), setCode: vi.fn(), resetMovementsUsed: vi.fn(), licenseSnapshot: vi.fn() };
     const manage = new ManageOffices(offices, { statsFor: vi.fn(), overview: vi.fn() }, { execute: vi.fn() } as never, scope, { hash: vi.fn(), compare: vi.fn() });
     await expect(manage.setLicense('1', { status: 'SUSPENDED', message: 'x' })).rejects.toBeInstanceOf(ApplicationError);
     expect(offices.update).toHaveBeenCalledWith('1', { status: 'SUSPENDED', expiresAt: null, message: 'x' });

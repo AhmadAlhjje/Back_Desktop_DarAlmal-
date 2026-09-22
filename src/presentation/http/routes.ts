@@ -5,7 +5,7 @@ import type { CreateTransfer } from '../../application/use-cases/movements/Creat
 import type { CreateJournalMovement } from '../../application/use-cases/movements/CreateJournalMovement.js';
 import type { TokenService } from '../../application/ports/services/TokenService.js';
 import { validate, validateQuery } from './middleware/validate.js';
-import { authenticate, authorize } from './middleware/authenticate.js';
+import { authenticate, authorize, requireMovementQuota } from './middleware/authenticate.js';
 import { changePasswordSchema, loginSchema } from './validators/authSchemas.js';
 import { createClientSchema } from './validators/clientSchemas.js';
 import { createTransferSchema } from './validators/transferSchemas.js';
@@ -451,6 +451,7 @@ export function createRoutes(deps: {
     '/movements/transfers',
     authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins, deps.notificationHub),
     authorize('movement.create'),
+    requireMovementQuota(deps.licenseMonitor),
     validate(createTransferSchema),
     asyncRoute(async (req, res) => {
       const result = await deps.createTransfer.execute({ ...req.body, createdBy: req.auth!.adminId });
@@ -461,6 +462,7 @@ export function createRoutes(deps: {
     '/movements/settlements',
     authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins, deps.notificationHub),
     authorize('movement.create'),
+    requireMovementQuota(deps.licenseMonitor),
     validate(createJournalMovementSchema),
     asyncRoute(async (req, res) => {
       res.status(201).json({
@@ -480,6 +482,7 @@ export function createRoutes(deps: {
     '/movements/multi',
     authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins, deps.notificationHub),
     authorize('movement.create'),
+    requireMovementQuota(deps.licenseMonitor),
     validate(createJournalMovementSchema),
     asyncRoute(async (req, res) => {
       res.status(201).json({
@@ -499,6 +502,7 @@ export function createRoutes(deps: {
     '/movements/receipts',
     authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins, deps.notificationHub),
     authorize('movement.create'),
+    requireMovementQuota(deps.licenseMonitor),
     validate(receiptPaymentSchema),
     asyncRoute(async (req, res) => {
       res.status(201).json({
@@ -518,6 +522,7 @@ export function createRoutes(deps: {
     '/movements/payments',
     authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins, deps.notificationHub),
     authorize('movement.create'),
+    requireMovementQuota(deps.licenseMonitor),
     validate(receiptPaymentSchema),
     asyncRoute(async (req, res) => {
       res.status(201).json({
@@ -537,6 +542,7 @@ export function createRoutes(deps: {
     '/movements/exchanges',
     authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins, deps.notificationHub),
     authorize('movement.create'),
+    requireMovementQuota(deps.licenseMonitor),
     validate(exchangeSchema),
     asyncRoute(async (req, res) => {
       res.status(201).json({

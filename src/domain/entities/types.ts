@@ -153,6 +153,8 @@ export interface ReceiptPayment {
   clientId: string;
   currencyId: string;
   amount: string;
+  /** الصندوق الذي قُبض إليه/دُفع منه (حساب من نوع صندوق) — للعرض والسجل؛ null = الصندوق الرئيسي. */
+  cashBoxClientId?: string | null;
 }
 export interface Notification {
   id: string;

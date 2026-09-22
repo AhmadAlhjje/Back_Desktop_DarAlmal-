@@ -14,6 +14,8 @@ export interface CreateReceiptPaymentInput {
   clientId: string;
   currencyId: string;
   amount: string;
+  /** صندوق هذا السند (اختياري، حساب من نوع صندوق) — قرار المستخدم 2026-09-22. */
+  cashBoxClientId?: string;
   createdBy: string;
 }
 export class CreateReceiptPayment {
@@ -75,6 +77,10 @@ export class CreateReceiptPayment {
       throw new ApplicationError('MOVEMENT_TYPE_NOT_FOUND', `Active ${input.type} movement type not found`, 404);
     if (!client) throw new ApplicationError('CLIENT_NOT_FOUND', 'Client not found', 404);
     if (!currency?.isActive) throw new ApplicationError('CURRENCY_NOT_FOUND', 'Active currency not found', 404);
+    if (input.cashBoxClientId) {
+      const box = await r.clientRepository.findById(input.cashBoxClientId);
+      if (!box || box.accountType !== 'BOX') throw new ApplicationError('CASH_BOX_INVALID', 'الصندوق المختار ليس حساب صندوق', 422);
+    }
     const side = input.type === ReceiptPaymentType.RECEIPT ? EntrySide.THEM : EntrySide.US;
     const totalResult = side === EntrySide.US ? input.amount : `-${input.amount}`;
     const persist = async (movementId: string, date: string, time: string) => {
@@ -85,6 +91,7 @@ export class CreateReceiptPayment {
         clientId: input.clientId,
         currencyId: input.currencyId,
         amount: input.amount,
+        cashBoxClientId: input.cashBoxClientId ?? null,
       });
       await r.journalRepository.createMany([
         {

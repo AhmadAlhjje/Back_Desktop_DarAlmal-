@@ -4,7 +4,7 @@ import type { TenantScope } from '../../../application/ports/services/TenantScop
 import type { AdminRepository } from '../../../application/ports/repositories/AdminRepository.js';
 import type { LicenseMonitor } from '../../../application/use-cases/license/LicenseMonitor.js';
 import type { SessionPresence } from '../../../application/ports/services/SessionPresence.js';
-import { licenseErrorFor } from '../../../application/use-cases/license/licenseError.js';
+import { licenseErrorFor, movementLimitErrorFor } from '../../../application/use-cases/license/licenseError.js';
 import { ApplicationError } from '../../../application/errors/ApplicationError.js';
 
 /** خطأ الحساب المعطَّل: يقفل التطبيق حتى يعيد المكتب/اللوحة تفعيله. */
@@ -48,6 +48,17 @@ export const authenticate =
           next();
         });
       })
+      .catch(next);
+  };
+
+/** حد الحركات: على مسارات إضافة الحركات فقط — بلوغ الحد يرفض الإضافة (403) ولا يمسّ بقية التطبيق. */
+export const requireMovementQuota =
+  (license: LicenseMonitor): RequestHandler =>
+  (req, _res, next) => {
+    if (!req.auth?.officeId) return next();
+    license
+      .current(req.auth.officeId)
+      .then((state) => next(movementLimitErrorFor(state) ?? undefined))
       .catch(next);
   };
 

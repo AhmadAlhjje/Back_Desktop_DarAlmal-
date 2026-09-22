@@ -173,6 +173,14 @@ export function createPlatformRoutes(deps: {
   );
 
   router.post(
+    '/offices/:id/movements/reset',
+    asyncRoute(async (req, res) => {
+      const office = await deps.manageOffices.resetMovementsUsed(req.params.id);
+      await deps.licenseMonitor.refresh();
+      res.json({ success: true, data: office });
+    }),
+  );
+  router.post(
     '/offices/:id/code',
     asyncRoute(async (req, res) => {
       res.json({ success: true, data: await deps.manageOffices.regenerateCode(req.params.id) });

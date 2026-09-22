@@ -81,6 +81,11 @@ export class SequelizeOfficeRepository implements OfficeRepository {
     return this.findById(id);
   }
 
+  async resetMovementsUsed(id: string): Promise<Office | null> {
+    await OfficeModel.update({ movements_used: 0 }, { where: { id_office: id }, ...this.options });
+    return this.findById(id);
+  }
+
   async setCode(id: string, code: string): Promise<Office | null> {
     await OfficeModel.update({ code }, { where: { id_office: id }, ...this.options });
     return this.findById(id);

@@ -82,7 +82,7 @@ export const dependencies = {
   listMovements: new ListMovements(repositories.movementRepository),
   getClientBalances: new GetClientBalances(reportsRepository, repositories.clientRepository),
   getBalanceSheet: new GetBalanceSheet(reportsRepository),
-  getDashboard: new GetDashboard(reportsRepository, repositories.movementRepository, clock),
+  getDashboard: new GetDashboard(reportsRepository, repositories.movementRepository, clock, undefined, offices, tenantScope),
   cancelMovement: new CancelMovement(uow),
   reverseMovement: new ReverseMovement(uow, clock),
   getNotifications: new GetNotifications(repositories.notificationRepository),

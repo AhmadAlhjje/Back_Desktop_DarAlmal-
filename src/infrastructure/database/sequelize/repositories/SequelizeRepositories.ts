@@ -981,7 +981,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             movement_id: i.movementId,
             statement: i.statement,
             first_client_id: i.clientId,
-            second_client_id: null,
+            second_client_id: i.cashBoxClientId ?? null,
             first_currency_id: i.currencyId,
             second_currency_id: null,
             first_amount: i.amount,
@@ -1004,6 +1004,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           clientId: m.first_client_id,
           currencyId: m.first_currency_id,
           amount: m.first_amount,
+          cashBoxClientId: m.second_client_id ?? null,
         };
       },
       async setType(movementId, type) {

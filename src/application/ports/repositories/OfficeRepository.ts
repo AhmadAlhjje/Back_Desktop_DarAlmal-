@@ -10,6 +10,8 @@ export interface OfficeRepository {
   update(id: string, patch: OfficePatch): Promise<Office | null>;
   /** تبديل كود المكتب (إعادة توليد عند ضياعه) — الكود القديم يتوقف فوراً. */
   setCode(id: string, code: string): Promise<Office | null>;
+  /** تصفير عدّاد الحركات المضافة (من اللوحة فقط). */
+  resetMovementsUsed(id: string): Promise<Office | null>;
   /** لقطة خفيفة لمراقبة الترخيص: حقول الترخيص لكل المكاتب. */
   licenseSnapshot(): Promise<Array<{ id: string } & LicenseFields>>;
 }

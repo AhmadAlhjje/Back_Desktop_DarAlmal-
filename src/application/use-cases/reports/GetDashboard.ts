@@ -3,6 +3,8 @@ import { BalanceValuationService } from '../../../domain/services/BalanceValuati
 import type { ReportsRepository } from '../../ports/repositories/ReportsRepository.js';
 import type { MovementRepository } from '../../ports/repositories/types.js';
 import type { Clock } from '../../ports/services/Clock.js';
+import type { OfficeRepository } from '../../ports/repositories/OfficeRepository.js';
+import type { TenantScope } from '../../ports/services/TenantScope.js';
 import { AMOUNT_SCALE } from '../../../domain/value-objects/Precision.js';
 
 interface CurrencyAccumulator {
@@ -20,14 +22,18 @@ export class GetDashboard {
     private movements: MovementRepository,
     private clock: Clock,
     private valuation = new BalanceValuationService(),
+    private offices?: OfficeRepository,
+    private scope?: TenantScope,
   ) {}
   async execute() {
     const today = this.clock.now().toISOString().slice(0, 10);
-    const [rows, day, series, recent] = await Promise.all([
+    const officeId = this.scope?.current() ?? null;
+    const [rows, day, series, recent, office] = await Promise.all([
       this.reports.allBalances({}),
       this.reports.dayStats(today),
       this.reports.dailySeries(30),
       this.movements.findListPage({ page: 1, limit: 10 }),
+      officeId && this.offices ? this.offices.findById(officeId) : Promise.resolve(null),
     ]);
     const byCurrency = new Map<string, CurrencyAccumulator>();
     for (const r of rows) {
@@ -61,6 +67,9 @@ export class GetDashboard {
     return {
       date: today,
       todayMovementsCount: day.count,
+      // عدد الحركات الكلي (عدّاد الإضافات، يُصفَّر من اللوحة) والحد إن وُجد — قرار المستخدم 2026-09-22
+      totalMovementsCount: office?.movementsUsed ?? 0,
+      movementLimit: office?.movementLimit ?? null,
       dailyProfitLoss: day.totalResult,
       totalValuedBalance: this.valuation.sum(currencies.map((c) => c.valuedUsd)),
       currencies,
