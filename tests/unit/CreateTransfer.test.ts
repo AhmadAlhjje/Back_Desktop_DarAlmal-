@@ -57,8 +57,8 @@ describe('CreateTransfer', () => {
     });
     const lines = journalCreate.mock.calls[0][0];
     expect(lines.map((x: any) => [x.clientId, x.side, x.amount])).toEqual([
-      ['10', 'US', '1010.0000000000'],
-      ['25', 'THEM', '1002.0000000000'],
+      ['10', 'US', '1010.00'],
+      ['25', 'THEM', '1002.00'],
     ]);
   });
 });

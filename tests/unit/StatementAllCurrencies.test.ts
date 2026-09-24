@@ -52,8 +52,8 @@ describe('GetClientStatement — all currencies', () => {
     expect(result.entries.every((e) => e.runningBalance === null)).toBe(true);
     const totals = (result as { totalsByCurrency: Array<{ currency: { code: string }; balance: string }> }).totalsByCurrency;
     expect(totals.map((t) => t.currency.code)).toEqual(['USD', 'SYP']);
-    expect(totals[0].balance).toBe('100.0000000000');
-    expect(totals[1].balance).toBe('-5000.0000000000');
+    expect(totals[0].balance).toBe('100.00');
+    expect(totals[1].balance).toBe('-5000.00');
   });
 
   it('a single-currency statement keeps its running balance and currency object', async () => {
@@ -66,7 +66,7 @@ describe('GetClientStatement — all currencies', () => {
     });
     const result = await s.execute({ clientId: '3', currencyId: '1', page: 1, limit: 50 });
     expect(result.currency).toMatchObject({ code: 'USD' });
-    expect(result.entries[0].runningBalance).toBe('100.0000000000');
-    expect(result.closingBalance).toBe('100.0000000000');
+    expect(result.entries[0].runningBalance).toBe('100.00');
+    expect(result.closingBalance).toBe('100.00');
   });
 });

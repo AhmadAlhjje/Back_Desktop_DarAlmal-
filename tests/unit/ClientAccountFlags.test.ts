@@ -36,9 +36,21 @@ describe('ManageClients — archive', () => {
   it('rejects archiving while any currency balance is non-zero', async () => {
     const m = manager(
       { findById: vi.fn().mockResolvedValue(client()) },
-      { clientBalances: vi.fn().mockResolvedValue([balanceRow('100', '100'), balanceRow('0.0001', '0')]) },
+      { clientBalances: vi.fn().mockResolvedValue([balanceRow('100', '100'), balanceRow('0.01', '0')]) },
     );
     await expect(m.archive('7', true)).rejects.toMatchObject({ code: 'ARCHIVE_NON_ZERO_BALANCE', status: 409 });
+  });
+
+  // المبالغ بمنزلتين (قرار المستخدم 2026-09-24): بقايا أقلّ من قرش في بيانات قديمة تُعدّ صفراً،
+  // وإلا تعذّر أرشفة الحساب إلى الأبد (لا يمكن تسويتها بحركة بمنزلتين).
+  it('treats a legacy sub-cent residue as zero so the account can still be archived', async () => {
+    const setArchived = vi.fn().mockResolvedValue(client({ archivedAt: '2026-09-24T00:00:00.000Z' }));
+    const m = manager(
+      { findById: vi.fn().mockResolvedValue(client()), setArchived, setCashBox: vi.fn() },
+      { clientBalances: vi.fn().mockResolvedValue([balanceRow('0.0001', '0')]) },
+    );
+    await expect(m.archive('7', true)).resolves.toBeTruthy();
+    expect(setArchived).toHaveBeenCalled();
   });
   it('archives when every balance is zero and clears the cash-box flag', async () => {
     const setArchived = vi.fn().mockResolvedValue(client({ archivedAt: '2026-09-13T00:00:00.000Z' }));

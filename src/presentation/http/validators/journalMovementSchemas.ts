@@ -1,15 +1,16 @@
 import { z } from 'zod';
 import { DECIMAL_PATTERN } from '../../../domain/value-objects/Precision.js';
+import { amountString } from './money.js';
 const id = z.string().regex(/^\d+$/);
 const decimal = z.string().regex(DECIMAL_PATTERN);
 const entry = z
   .object({
     clientId: id,
     currencyId: id,
-    amount: decimal,
+    amount: amountString,
     side: z.enum(['US', 'THEM']),
     exchangeRate: decimal.optional(),
-    fees: decimal.optional(),
+    fees: amountString.optional(),
     feePercentage: decimal.optional(),
     description: z.string().optional(),
   })

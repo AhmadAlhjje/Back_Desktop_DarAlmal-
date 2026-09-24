@@ -11,5 +11,5 @@ describe('BalanceCalculationService', () => {
         ],
         '5',
       ),
-    ).toBe('85.0500000000'));
+    ).toBe('85.05'));
 });

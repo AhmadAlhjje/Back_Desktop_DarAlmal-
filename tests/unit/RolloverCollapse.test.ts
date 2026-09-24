@@ -52,9 +52,9 @@ describe('collapsing everything before the rollover into one line', () => {
     expect(findStatementPage).toHaveBeenCalledWith(expect.objectContaining({ fromAt: ROLLOVER_AT }));
     expect(rolloverSummary).toHaveBeenCalledWith({ clientId: '1', currencyId: '1', before: ROLLOVER_AT });
     expect(result.rolledOver).toMatchObject({ at: ROLLOVER_AT, count: 17, totalUs: '900', totalThem: '400' });
-    expect(result.rolledOver!.balance).toBe('500.0000000000');
+    expect(result.rolledOver!.balance).toBe('500.00');
     // السطر المجمَّع هو نفسه الرصيد الافتتاحي للفترة الحالية — لا ازدواج ولا فجوة.
-    expect(result.openingBalance).toBe('500.0000000000');
+    expect(result.openingBalance).toBe('500.00');
     expect(result.entries).toHaveLength(1);
     expect(result.scope).toBe('CURRENT');
   });
@@ -127,7 +127,7 @@ describe('collapsing everything before the rollover into one line', () => {
       collapseRollover: true,
     });
     expect(result.rolledOver!.byCurrency).toEqual([
-      { currency: { id: '1', code: 'USD', name: 'دولار', symbol: '$' }, count: 5, totalUs: '1000', totalThem: '250', balance: '750.0000000000' },
+      { currency: { id: '1', code: 'USD', name: 'دولار', symbol: '$' }, count: 5, totalUs: '1000', totalThem: '250', balance: '750.00' },
     ]);
   });
 });

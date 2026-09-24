@@ -11,7 +11,7 @@ const original: any = {
   description: null,
   movementDate: '2026-01-01',
   movementTime: '10:00:00',
-  totalResult: '25.0000000000',
+  totalResult: '25.00',
   status: MovementStatus.POSTED,
   createdBy: '1',
   updatedBy: null,
@@ -59,7 +59,7 @@ describe('movement lifecycle', () => {
     expect(repos.movementRepository.updateContents).toHaveBeenCalledWith('10', {
       movementTypeId: '1',
       clientId: '3',
-      totalResult: '-25.0000000000',
+      totalResult: '-25.00',
       updatedBy: '9',
       reversedAt: clock.now(),
       reversedBy: '9',

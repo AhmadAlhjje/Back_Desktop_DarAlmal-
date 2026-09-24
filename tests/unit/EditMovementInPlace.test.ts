@@ -18,7 +18,7 @@ function transferRepos(stored: any) {
     description: 'حوالة قديمة',
     movementDate: '2026-01-01',
     movementTime: '09:30:00',
-    totalResult: '8.0000000000',
+    totalResult: '8.00',
     status: MovementStatus.POSTED,
     createdBy: '1',
     updatedBy: null,
@@ -98,7 +98,7 @@ describe('edit movement in place', () => {
     expect(repos.movementRepository.updateContents).toHaveBeenCalledWith('77', {
       clientId: '10',
       description: 'حوالة معدّلة',
-      totalResult: '8.0000000000',
+      totalResult: '8.00',
       updatedBy: '9',
     });
     expect(result.movement.movementNo).toBe('77');

@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { DECIMAL_PATTERN } from '../../../domain/value-objects/Precision.js';
+import { amountString, rateString } from './money.js';
 const id = z.string().regex(/^\d+$/);
-const amount = z.string().regex(DECIMAL_PATTERN);
-const rate = z.string().regex(DECIMAL_PATTERN);
+const amount = amountString;
+const rate = rateString;
 export const exchangeSchema = z
   .object({
     clientId: id,

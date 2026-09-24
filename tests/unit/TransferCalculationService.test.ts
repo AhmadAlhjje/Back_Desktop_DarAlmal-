@@ -10,5 +10,5 @@ describe('TransferCalculationService', () => {
         feeUs: '10',
         feeThem: '2',
       }),
-    ).toEqual({ totalUs: '1010.0000000000', totalThem: '902.0000000000', result: '108.0000000000' }));
+    ).toEqual({ totalUs: '1010.00', totalThem: '902.00', result: '108.00' }));
 });
