@@ -2,7 +2,7 @@
 
 Backend مالي مبني بـNode.js 20 وTypeScript وExpress وMySQL 8 وSequelize وفق Clean Architecture. العميل هو الحساب المالي، و`journal_entries` هو مصدر الحقيقة الوحيد للأرصدة.
 
-## المتطلبات
+## المتطلبا
 
 - Node.js 20+
 - MySQL 8+
