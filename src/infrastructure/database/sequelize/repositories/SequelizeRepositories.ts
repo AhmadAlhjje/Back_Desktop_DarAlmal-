@@ -1,5 +1,6 @@
 import { fn, col, literal, Op, QueryTypes, type Transaction, type WhereOptions } from 'sequelize';
 import { sequelize } from '../sequelize.js';
+import { clientCurrencyWhere } from '../where.js';
 
 /** تهريب قيمة نصية للاستخدام داخل `literal` (يُنتج نصاً مقتبساً آمناً). */
 const sequelizeEscape = (value: string): string => sequelize.escape(value);
@@ -816,10 +817,10 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
         // الرصيد الافتتاحي = كل ما قبل بداية الفترة (أدقّ حدّ متاح: لحظة التدوير إن وُجدت).
         const openingBefore = filters.fromAt ?? (filters.dateFrom ? `${filters.dateFrom} 00:00:00` : null);
         const opening = openingBefore
-          ? await sideTotals(
-              { client_id: filters.clientId, currency_id: filters.currencyId },
-              { status: 'POSTED', created_at: { [Op.lt]: openingBefore } },
-            )
+          ? await sideTotals(clientCurrencyWhere(filters.clientId, filters.currencyId), {
+              status: 'POSTED',
+              created_at: { [Op.lt]: openingBefore },
+            })
           : { us: '0', them: '0' };
         let beforePage = { us: '0', them: '0' };
         const first = page.rows[0];
@@ -873,7 +874,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       },
       async rolloverSummary({ clientId, currencyId, before }) {
         // سطر «ما قبل التدوير»: مجاميع وعدد القيود الأقدم من لحظة التدوير (ولكل عملة عند كشف كل العملات).
-        const where = { client_id: clientId, ...(currencyId && { currency_id: currencyId }) };
+        const where = clientCurrencyWhere(clientId, currencyId);
         const movementFilter = { status: 'POSTED', created_at: { [Op.lt]: before } };
         const [totals, count] = await Promise.all([
           sideTotals(where, movementFilter),
@@ -889,14 +890,15 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             'currency_id',
             [fn('SUM', col('amount_us')), 'us'],
             [fn('SUM', col('amount_them')), 'them'],
-            [fn('COUNT', col('id_day')), 'rows'],
+            // اسم بديل غير محجوز في MariaDB (ROWS كلمة محجوزة منذ 10.6).
+            [fn('COUNT', col('id_day')), 'entries_count'],
           ],
           where,
           include: [{ model: MovementModel, as: 'movement', required: true, attributes: [], where: movementFilter }],
           group: ['currency_id'],
           raw: true,
           ...options,
-        })) as unknown as Array<{ currency_id: string; us: string | null; them: string | null; rows: number | string }>;
+        })) as unknown as Array<{ currency_id: string; us: string | null; them: string | null; entries_count: number | string }>;
         return {
           count,
           us: totals.us,
@@ -905,7 +907,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
             currencyId: String(r.currency_id),
             us: String(r.us ?? '0'),
             them: String(r.them ?? '0'),
-            count: Number(r.rows ?? 0),
+            count: Number(r.entries_count ?? 0),
           })),
         };
       },

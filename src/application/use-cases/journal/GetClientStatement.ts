@@ -27,8 +27,8 @@ export class GetClientStatement {
   ) {
     const client = await this.clients.findById(filters.clientId);
     if (!client) throw new ApplicationError('CLIENT_NOT_FOUND', 'Client not found', 404);
-    // لحظة آخر تدوير: حدّ الطيّ. بلا تدوير لا يتغيّر شيء (الكشف كما كان).
-    const rolloverAt = client.lastRolloverAt ?? null;
+    // لحظة آخر تدوير: حدّ الطيّ (كائن Date للاستعلام، ونصّ ISO في الرد). بلا تدوير لا يتغيّر شيء.
+    const rolloverAt = client.lastRolloverAt ? new Date(client.lastRolloverAt) : null;
     const collapsing = Boolean(filters.collapseRollover && rolloverAt);
     const reviewing = filters.scope === 'ROLLED_OVER';
     if (reviewing && !rolloverAt)
@@ -54,7 +54,7 @@ export class GetClientStatement {
         : null;
     const rolloverBlock = rolledOver
       ? {
-          at: rolloverAt,
+          at: rolloverAt!.toISOString(),
           count: rolledOver.count,
           totalUs: rolledOver.us,
           totalThem: rolledOver.them,

@@ -169,12 +169,12 @@ export interface JournalFilters {
   dateFrom?: string;
   dateTo?: string;
   /**
-   * حدّان زمنيّان دقيقان (ISO) لطيّ ما قبل «تدوير الأرصدة» (2026-09-23): `fromAt` = القيود من
-   * لحظة التدوير فصاعداً، `beforeAt` = القيود الأقدم منها (المطويّة) — بخلاف dateFrom/dateTo
-   * اللذين يعملان بدقّة اليوم فقط.
+   * حدّان زمنيّان دقيقان لطيّ ما قبل «تدوير الأرصدة» (2026-09-23): `fromAt` = القيود من لحظة
+   * التدوير فصاعداً، `beforeAt` = القيود الأقدم منها (المطويّة) — بخلاف dateFrom/dateTo اللذين
+   * يعملان بدقّة اليوم. **كائن Date** لا نصّ ISO: النصّ `…T…Z` غير صالح للمقارنة في MySQL.
    */
-  fromAt?: string;
-  beforeAt?: string;
+  fromAt?: Date;
+  beforeAt?: Date;
   clientId?: string;
   currencyId?: string;
   movementTypeId?: string;
@@ -216,7 +216,7 @@ export interface JournalRepository {
   findPage(filters: JournalFilters): Promise<JournalPage>;
   findStatementPage(filters: JournalFilters & { clientId: string; currencyId?: string }): Promise<StatementPage>;
   /** مجاميع القيود الأقدم من لحظة (التدوير) — سطر واحد مجمَّع بدل عرضها كلها (2026-09-23). */
-  rolloverSummary(params: { clientId: string; currencyId?: string; before: string }): Promise<RolloverSummary>;
+  rolloverSummary(params: { clientId: string; currencyId?: string; before: Date }): Promise<RolloverSummary>;
 }
 export interface TransferRepository {
   create(input: Transfer): Promise<Transfer>;

@@ -49,8 +49,9 @@ describe('collapsing everything before the rollover into one line', () => {
     const { use, findStatementPage, rolloverSummary } = make(ROLLOVER_AT);
     const result = await use.execute({ clientId: '1', currencyId: '1', page: 1, limit: 50, collapseRollover: true });
 
-    expect(findStatementPage).toHaveBeenCalledWith(expect.objectContaining({ fromAt: ROLLOVER_AT }));
-    expect(rolloverSummary).toHaveBeenCalledWith({ clientId: '1', currencyId: '1', before: ROLLOVER_AT });
+    // حدّ الطيّ يُمرَّر كائن Date (النصّ ISO غير صالح للمقارنة في MySQL — بلاغ 2026-09-26).
+    expect(findStatementPage).toHaveBeenCalledWith(expect.objectContaining({ fromAt: new Date(ROLLOVER_AT) }));
+    expect(rolloverSummary).toHaveBeenCalledWith({ clientId: '1', currencyId: '1', before: new Date(ROLLOVER_AT) });
     expect(result.rolledOver).toMatchObject({ at: ROLLOVER_AT, count: 17, totalUs: '900', totalThem: '400' });
     expect(result.rolledOver!.balance).toBe('500.00');
     // السطر المجمَّع هو نفسه الرصيد الافتتاحي للفترة الحالية — لا ازدواج ولا فجوة.
@@ -88,7 +89,7 @@ describe('collapsing everything before the rollover into one line', () => {
       scope: 'ROLLED_OVER',
     });
     expect(findStatementPage).toHaveBeenCalledWith(
-      expect.objectContaining({ beforeAt: ROLLOVER_AT, dateFrom: undefined, dateTo: undefined }),
+      expect.objectContaining({ beforeAt: new Date(ROLLOVER_AT), dateFrom: undefined, dateTo: undefined }),
     );
     expect(rolloverSummary).not.toHaveBeenCalled();
     expect(result.rolledOver).toBeNull();
