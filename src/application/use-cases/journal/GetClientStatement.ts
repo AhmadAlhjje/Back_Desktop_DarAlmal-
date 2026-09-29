@@ -9,6 +9,8 @@ import type {
 import { ApplicationError } from '../../errors/ApplicationError.js';
 import { AMOUNT_SCALE } from '../../../domain/value-objects/Precision.js';
 const net = (value: { us: string; them: string }) => new Decimal(value.us).minus(value.them);
+/** الأحدث من لحظتين (حدّ «من»: لحظة التدوير مقابل بداية فترة المستخدم). */
+const latest = (a: Date, b?: Date) => (b && b.getTime() > a.getTime() ? b : a);
 
 /**
  * طيّ ما قبل «تدوير الأرصدة» (قرار المستخدم 2026-09-23): بدل عرض كل العمليات القديمة، تُجمع في
@@ -35,11 +37,12 @@ export class GetClientStatement {
       throw new ApplicationError('NO_ROLLOVER', 'لا يوجد تدوير سابق لهذا الحساب', 404);
     const pageFilters: JournalFilters & { clientId: string; currencyId?: string } = {
       ...filters,
-      // المراجعة: القيود المطويّة وحدها (بلا حدود تاريخ المستخدم). الطيّ: من لحظة التدوير فصاعداً.
+      // المراجعة: القيود المطويّة وحدها (بلا حدود تاريخ المستخدم). الطيّ: من لحظة التدوير فصاعداً،
+      // أو من بداية فترة المستخدم إن كانت أحدث — الحدّان كلاهما «من»، فالأحدث هو الفعّال.
       ...(reviewing
-        ? { beforeAt: rolloverAt!, dateFrom: undefined, dateTo: undefined }
+        ? { beforeAt: rolloverAt!, dateFrom: undefined, dateTo: undefined, fromAt: undefined, toAt: undefined }
         : collapsing
-          ? { fromAt: rolloverAt! }
+          ? { fromAt: latest(rolloverAt!, filters.fromAt) }
           : {}),
     };
     const [currency, result] = await Promise.all([

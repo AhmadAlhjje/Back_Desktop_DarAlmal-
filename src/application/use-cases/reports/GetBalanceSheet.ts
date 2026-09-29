@@ -5,6 +5,8 @@ import { AMOUNT_SCALE, ZERO_AMOUNT } from '../../../domain/value-objects/Precisi
 
 export interface BalanceSheetFilters {
   asOf?: string;
+  /** نهاية اليوم كلحظة بتوقيت المستخدم — تُقدَّم على asOf (انظر periodEnd). */
+  asOfAt?: Date;
   currencyId?: string;
   /** valued = الصندوق المقوّم (كل العملات مقوّمة بالدولار لكل حساب) | currency = صندوق العملات (صف لكل عملة). */
   mode: 'valued' | 'currency';
@@ -38,6 +40,7 @@ export class GetBalanceSheet {
   async execute(filters: BalanceSheetFilters) {
     const rows = await this.reports.allBalances({
       asOf: filters.asOf,
+      asOfAt: filters.asOfAt,
       currencyId: filters.currencyId,
       clientQuery: filters.clientQuery,
       includeSecret: filters.includeSecret,

@@ -1,6 +1,6 @@
 import { fn, col, literal, Op, QueryTypes, type Transaction, type WhereOptions } from 'sequelize';
 import { sequelize } from '../sequelize.js';
-import { clientCurrencyWhere } from '../where.js';
+import { clientCurrencyWhere, periodEnd, periodStart } from '../where.js';
 
 /** تهريب قيمة نصية للاستخدام داخل `literal` (يُنتج نصاً مقتبساً آمناً). */
 const sequelizeEscape = (value: string): string => sequelize.escape(value);
@@ -66,17 +66,21 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
     ...(f.entrySide === 'US' && { amount_us: { [Op.gt]: 0 } }),
     ...(f.entrySide === 'THEM' && { amount_them: { [Op.gt]: 0 } }),
   });
-  const movementWhere = (f: import('../../../../application/ports/repositories/types.js').JournalFilters) => ({
-    ...(f.movementTypeId && { movement_type_id: f.movementTypeId }),
-    ...(f.movementNo && { movement_no: f.movementNo }),
-    ...(f.status && { status: f.status }),
-    ...((f.dateFrom || f.dateTo) && {
-      created_at: {
-        ...(f.dateFrom && { [Op.gte]: `${f.dateFrom} 00:00:00` }),
-        ...(f.dateTo && { [Op.lte]: `${f.dateTo} 23:59:59` }),
-      },
-    }),
-  });
+  const movementWhere = (f: import('../../../../application/ports/repositories/types.js').JournalFilters) => {
+    const since = periodStart(f.fromAt, f.dateFrom);
+    const until = periodEnd(f.toAt, f.dateTo);
+    return {
+      ...(f.movementTypeId && { movement_type_id: f.movementTypeId }),
+      ...(f.movementNo && { movement_no: f.movementNo }),
+      ...(f.status && { status: f.status }),
+      ...((since || until) && {
+        created_at: {
+          ...(since && { [Op.gte]: since }),
+          ...(until && { [Op.lte]: until }),
+        },
+      }),
+    };
+  };
   /** شروط سجل الحركات؛ `alias` هو اسم جدول الحركات في الاستعلام (MovementModel أو movement). */
   const movementListWhere = (
     f: import('../../../../application/ports/repositories/types.js').MovementListFilters,
@@ -88,11 +92,13 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
     if (f.status) and.push({ status: f.status });
     if (f.movementNo) and.push({ movement_no: f.movementNo });
     if (f.createdBy) and.push({ created_by: f.createdBy });
-    if (f.dateFrom || f.dateTo)
+    const since = periodStart(f.fromAt, f.dateFrom);
+    const until = periodEnd(f.toAt, f.dateTo);
+    if (since || until)
       and.push({
         created_at: {
-          ...(f.dateFrom && { [Op.gte]: `${f.dateFrom} 00:00:00` }),
-          ...(f.dateTo && { [Op.lte]: `${f.dateTo} 23:59:59` }),
+          ...(since && { [Op.gte]: since }),
+          ...(until && { [Op.lte]: until }),
         },
       });
     if (f.clientId)
@@ -789,11 +795,12 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
       },
       async findStatementPage(filters) {
         const periodWhere = journalWhere(filters);
-        // fromAt/beforeAt: لحظة التدوير بدقّة الثانية (طيّ ما قبلها في سطر واحد) — تُجمع مع حدود اليوم.
+        // fromAt/toAt: لحظة الواجهة أو لحظة التدوير؛ beforeAt: المطويّ وحده (شاشة المراجعة).
+        const since = periodStart(filters.fromAt, filters.dateFrom);
+        const until = periodEnd(filters.toAt, filters.dateTo);
         const createdAt = {
-          ...(filters.dateFrom && { [Op.gte]: `${filters.dateFrom} 00:00:00` }),
-          ...(filters.dateTo && { [Op.lte]: `${filters.dateTo} 23:59:59` }),
-          ...(filters.fromAt && { [Op.gte]: filters.fromAt }),
+          ...(since && { [Op.gte]: since }),
+          ...(until && { [Op.lte]: until }),
           ...(filters.beforeAt && { [Op.lt]: filters.beforeAt }),
         };
         const statementMovementWhere = {
@@ -815,7 +822,7 @@ export function createRepositories(transaction?: Transaction, logger?: Logger): 
           ...options,
         });
         // الرصيد الافتتاحي = كل ما قبل بداية الفترة (أدقّ حدّ متاح: لحظة التدوير إن وُجدت).
-        const openingBefore = filters.fromAt ?? (filters.dateFrom ? `${filters.dateFrom} 00:00:00` : null);
+        const openingBefore = since ?? null;
         const opening = openingBefore
           ? await sideTotals(clientCurrencyWhere(filters.clientId, filters.currencyId), {
               status: 'POSTED',

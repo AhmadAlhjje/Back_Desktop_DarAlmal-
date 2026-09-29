@@ -22,6 +22,7 @@ import type { GetJournal } from '../../application/use-cases/journal/GetJournal.
 import type { GetClientStatement } from '../../application/use-cases/journal/GetClientStatement.js';
 import {
   balanceSheetQuerySchema,
+  dashboardQuerySchema,
   balancesQuerySchema,
   journalQuerySchema,
   movementsQuerySchema,
@@ -682,6 +683,9 @@ export function createRoutes(deps: {
         data: await deps.getJournal.execute({
           dateFrom: q.date_from,
           dateTo: q.date_to,
+          // لحظتا الفترة بتوقيت المستخدم (تُقدَّمان على التاريخ النصي — بلاغ 2026-09-30).
+          fromAt: q.from_at,
+          toAt: q.to_at,
           clientId: q.client_id,
           currencyId: q.currency_id,
           movementTypeId: q.movement_type_id,
@@ -708,6 +712,8 @@ export function createRoutes(deps: {
           currencyId: q.currency_id,
           dateFrom: q.date_from,
           dateTo: q.date_to,
+          fromAt: q.from_at,
+          toAt: q.to_at,
           movementTypeId: q.movement_type_id,
           // طيّ ما قبل التدوير في سطر واحد، و`scope=ROLLED_OVER` يفتح المطويّ للمراجعة (2026-09-23).
           collapseRollover: q.collapse_rollover === 'true',
@@ -730,6 +736,8 @@ export function createRoutes(deps: {
         data: await deps.listMovements.execute({
           dateFrom: q.date_from,
           dateTo: q.date_to,
+          fromAt: q.from_at,
+          toAt: q.to_at,
           movementTypeId: q.movement_type_id,
           clientId: q.client_id,
           currencyId: q.currency_id,
@@ -749,7 +757,8 @@ export function createRoutes(deps: {
     authorize('journal.view'),
     validateQuery(balancesQuerySchema),
     asyncRoute(async (req, res) => {
-      res.json({ success: true, data: await deps.getClientBalances.execute(req.params.id, req.validatedQuery.as_of) });
+      const q = req.validatedQuery;
+      res.json({ success: true, data: await deps.getClientBalances.execute(req.params.id, q.as_of, q.as_of_at) });
     }),
   );
   router.get(
@@ -763,6 +772,7 @@ export function createRoutes(deps: {
         success: true,
         data: await deps.getBalanceSheet.execute({
           asOf: q.as_of,
+          asOfAt: q.as_of_at,
           currencyId: q.currency_id,
           mode: q.mode,
           detail: q.detail,
@@ -776,8 +786,11 @@ export function createRoutes(deps: {
     '/dashboard',
     authenticate(deps.tokens, deps.licenseMonitor, deps.tenantScope, deps.admins, deps.notificationHub),
     authorize('journal.view'),
-    asyncRoute(async (_req, res) => {
-      res.json({ success: true, data: await deps.getDashboard.execute() });
+    validateQuery(dashboardQuerySchema),
+    asyncRoute(async (req, res) => {
+      const q = req.validatedQuery;
+      // «حركات اليوم» بيوم المستخدم لا بيوم UTC (بلاغ 2026-09-30).
+      res.json({ success: true, data: await deps.getDashboard.execute({ fromAt: q.from_at, toAt: q.to_at }) });
     }),
   );
   router.get(

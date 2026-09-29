@@ -24,7 +24,7 @@ describe('all-currencies statement never builds an undefined where value', () =>
     const findStatementPage = vi.fn(async (filters: { currencyId?: string }) => {
       // نحاكي ما يفعله Sequelize: قيمة undefined داخل where تُسقِط الطلب كله.
       const where = clientCurrencyWhere('1', filters.currencyId);
-      if (Object.values(where).includes(undefined)) throw new Error('WHERE parameter has invalid "undefined" value');
+      if (Object.values(where).some((v) => v === undefined)) throw new Error('WHERE parameter has invalid "undefined" value');
       return {
         count: 0,
         opening: { us: '0', them: '0' },

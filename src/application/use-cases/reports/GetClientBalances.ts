@@ -10,10 +10,10 @@ export class GetClientBalances {
     private clients: ClientRepository,
     private valuation = new BalanceValuationService(),
   ) {}
-  async execute(clientId: string, asOf?: string) {
+  async execute(clientId: string, asOf?: string, asOfAt?: Date) {
     const client = await this.clients.findById(clientId);
     if (!client) throw new ApplicationError('CLIENT_NOT_FOUND', 'Client not found', 404);
-    const rows = await this.reports.clientBalances(clientId, asOf);
+    const rows = await this.reports.clientBalances(clientId, asOf, asOfAt);
     const balances = rows.map((r) => {
       const balance = this.valuation.net(r.totalUs, r.totalThem);
       return {

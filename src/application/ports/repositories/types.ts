@@ -91,6 +91,9 @@ export interface MovementDetails {
 export interface MovementListFilters {
   dateFrom?: string;
   dateTo?: string;
+  /** بداية/نهاية الفترة كلحظة دقيقة من الواجهة — تُقدَّم على dateFrom/dateTo (انظر periodStart). */
+  fromAt?: Date;
+  toAt?: Date;
   movementTypeId?: string;
   clientId?: string;
   /** حركة تحتوي قيداً بهذه العملة. */
@@ -169,11 +172,13 @@ export interface JournalFilters {
   dateFrom?: string;
   dateTo?: string;
   /**
-   * حدّان زمنيّان دقيقان لطيّ ما قبل «تدوير الأرصدة» (2026-09-23): `fromAt` = القيود من لحظة
-   * التدوير فصاعداً، `beforeAt` = القيود الأقدم منها (المطويّة) — بخلاف dateFrom/dateTo اللذين
-   * يعملان بدقّة اليوم. **كائن Date** لا نصّ ISO: النصّ `…T…Z` غير صالح للمقارنة في MySQL.
+   * حدود زمنية دقيقة. **كائن Date** لا نصّ ISO: النصّ `…T…Z` غير صالح للمقارنة في MySQL.
+   * - `fromAt`/`toAt`: بداية الفترة ونهايتها كلحظة — من الواجهة (بتوقيت المستخدم، انظر
+   *   `periodStart`) أو من لحظة «تدوير الأرصدة» عند الطيّ؛ تُقدَّم على dateFrom/dateTo.
+   * - `beforeAt`: القيود الأقدم من لحظة التدوير (المطويّة) لشاشة المراجعة (2026-09-23).
    */
   fromAt?: Date;
+  toAt?: Date;
   beforeAt?: Date;
   clientId?: string;
   currencyId?: string;

@@ -25,12 +25,13 @@ export class GetDashboard {
     private offices?: OfficeRepository,
     private scope?: TenantScope,
   ) {}
-  async execute() {
+  /** `fromAt`/`toAt`: بداية «اليوم» ونهايته بتوقيت المستخدم — بدونهما «اليوم» هو يوم UTC. */
+  async execute(userDay: { fromAt?: Date; toAt?: Date } = {}) {
     const today = this.clock.now().toISOString().slice(0, 10);
     const officeId = this.scope?.current() ?? null;
     const [rows, day, series, recent, office] = await Promise.all([
       this.reports.allBalances({}),
-      this.reports.dayStats(today),
+      this.reports.dayStats(today, userDay.fromAt, userDay.toAt),
       this.reports.dailySeries(30),
       this.movements.findListPage({ page: 1, limit: 10 }),
       officeId && this.offices ? this.offices.findById(officeId) : Promise.resolve(null),

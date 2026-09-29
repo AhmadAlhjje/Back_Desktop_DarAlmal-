@@ -1,6 +1,7 @@
 import { QueryTypes, type Sequelize } from 'sequelize';
 import type { BalanceAggregateRow, DailyPoint, ReportsRepository } from '../../../../application/ports/repositories/ReportsRepository.js';
 import { requireTenant } from '../../../tenancy/TenantContext.js';
+import { periodEnd, periodStart } from '../where.js';
 
 interface RawAggregate {
   client_id: string | number;
@@ -53,14 +54,15 @@ export class SequelizeReportsRepository implements ReportsRepository {
     }));
   }
 
-  async clientBalances(clientId: string, asOf?: string): Promise<BalanceAggregateRow[]> {
+  async clientBalances(clientId: string, asOf?: string, asOfAt?: Date): Promise<BalanceAggregateRow[]> {
+    const until = periodEnd(asOfAt, asOf);
     const rows = await this.db.query<RawAggregate>(
       `${SequelizeReportsRepository.BASE_SELECT}
-       WHERE je.office_id = :officeId AND je.client_id = :clientId ${asOf ? 'AND m.created_at <= :asOf' : ''}
+       WHERE je.office_id = :officeId AND je.client_id = :clientId ${until ? 'AND m.created_at <= :until' : ''}
        ${SequelizeReportsRepository.GROUP_ORDER}`,
       {
         type: QueryTypes.SELECT,
-        replacements: { officeId: requireTenant('journal_entries'), clientId, asOf: asOf ? `${asOf} 23:59:59` : null },
+        replacements: { officeId: requireTenant('journal_entries'), clientId, until: until ?? null },
       },
     );
     return this.map(rows);
@@ -68,13 +70,15 @@ export class SequelizeReportsRepository implements ReportsRepository {
 
   async allBalances(filters: {
     asOf?: string;
+    asOfAt?: Date;
     currencyId?: string;
     clientQuery?: string;
     includeSecret?: boolean;
   }): Promise<BalanceAggregateRow[]> {
     const conditions: string[] = ['je.office_id = :officeId'];
     if (!filters.includeSecret) conditions.push('c.is_secret = 0');
-    if (filters.asOf) conditions.push('m.created_at <= :asOf');
+    const until = periodEnd(filters.asOfAt, filters.asOf);
+    if (until) conditions.push('m.created_at <= :until');
     if (filters.currencyId) conditions.push('je.currency_id = :currencyId');
     if (filters.clientQuery) conditions.push('(c.full_name LIKE :q OR c.client_code LIKE :q)');
     const rows = await this.db.query<RawAggregate>(
@@ -85,7 +89,7 @@ export class SequelizeReportsRepository implements ReportsRepository {
         type: QueryTypes.SELECT,
         replacements: {
           officeId: requireTenant('journal_entries'),
-          asOf: filters.asOf ? `${filters.asOf} 23:59:59` : null,
+          until: until ?? null,
           currencyId: filters.currencyId ?? null,
           q: filters.clientQuery ? `%${filters.clientQuery}%` : null,
         },
@@ -94,13 +98,17 @@ export class SequelizeReportsRepository implements ReportsRepository {
     return this.map(rows);
   }
 
-  async dayStats(date: string): Promise<{ count: number; totalResult: string }> {
+  async dayStats(date: string, fromAt?: Date, toAt?: Date): Promise<{ count: number; totalResult: string }> {
     const rows = await this.db.query<{ c: string | number | null; r: string | null }>(
       `SELECT COUNT(*) AS c, COALESCE(SUM(total_result), 0) AS r FROM movements
        WHERE office_id = :officeId AND status = 'POSTED' AND created_at >= :from AND created_at <= :to`,
       {
         type: QueryTypes.SELECT,
-        replacements: { officeId: requireTenant('movements'), from: `${date} 00:00:00`, to: `${date} 23:59:59` },
+        replacements: {
+          officeId: requireTenant('movements'),
+          from: periodStart(fromAt, date)!,
+          to: periodEnd(toAt, date)!,
+        },
       },
     );
     return { count: Number(rows[0]?.c ?? 0), totalResult: String(rows[0]?.r ?? '0') };
